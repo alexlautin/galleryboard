@@ -1,17 +1,15 @@
 const adjectives = [
-  'Happy', 'Clever', 'Bright', 'Swift', 'Gentle', 'Bold', 'Calm', 'Wise',
-  'Kind', 'Quick', 'Brave', 'Smart', 'Eager', 'Fair', 'Pure', 'Warm',
-  'Sharp', 'Fresh', 'Noble', 'Proud'
+  'Happy', 'Clever', 'Brave', 'Swift', 'Bright', 'Calm', 'Wise', 'Kind',
+  'Gentle', 'Smart', 'Quick', 'Lively', 'Peaceful', 'Cheerful', 'Eager', 'Friendly'
 ];
 
 const nouns = [
-  'Panda', 'Eagle', 'Tiger', 'Dolphin', 'Lion', 'Wolf', 'Bear', 'Fox',
-  'Hawk', 'Deer', 'Owl', 'Swan', 'Horse', 'Robin', 'Dove', 'Seal',
-  'Lynx', 'Elk', 'Hare', 'Crane'
+  'Panda', 'Dolphin', 'Eagle', 'Lion', 'Tiger', 'Bear', 'Wolf', 'Fox',
+  'Hawk', 'Deer', 'Owl', 'Duck', 'Frog', 'Cat', 'Dog', 'Bird'
 ];
 
 export function generateTwoWordName(): string {
   const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
-  return `${adjective}${noun}`;
+  return `${adjective} ${noun}`;
 } 

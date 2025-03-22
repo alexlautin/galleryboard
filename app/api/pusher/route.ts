@@ -84,15 +84,32 @@ export async function POST(req: Request) {
         console.log(`Draw update from student ${studentId} in classroom ${classCode}`);
 
         try {
-          await pusherServer.trigger(`classroom-${classCode}`, 'draw-update', {
+          // Only send canvas state if it's provided and not too large
+          const eventData = {
             studentId,
             drawData,
-            canvasState
-          });
+            canvasState: canvasState && canvasState.length < 10000 ? canvasState : null
+          };
+
+          await pusherServer.trigger(`classroom-${classCode}`, 'draw-update', eventData);
           console.log('Draw update event sent successfully');
         } catch (error) {
           console.error('Error triggering Pusher event:', error);
-          throw error;
+          // If the error is due to payload size, try sending without canvas state
+          if (error instanceof Error && error.message.includes('413')) {
+            try {
+              await pusherServer.trigger(`classroom-${classCode}`, 'draw-update', {
+                studentId,
+                drawData,
+                canvasState: null
+              });
+              console.log('Draw update event sent successfully without canvas state');
+            } catch (retryError) {
+              throw retryError;
+            }
+          } else {
+            throw error;
+          }
         }
 
         return NextResponse.json({ success: true });

@@ -7,11 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { generateTwoWordName } from '@/lib/name-generator';
-
-interface Student {
-  id: string;
-  displayName: string;
-}
+import type { Student } from '@/types/socket';
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
@@ -28,15 +24,8 @@ export default function Home() {
     // Generate a unique ID for this client
     const uniqueId = Math.random().toString(36).substring(2, 15);
     setStudentId(uniqueId);
-    setDisplayName(generateTwoWordName());
-
-    // Log environment variables (without sensitive data)
-    console.log('Environment:', {
-      isDev: process.env.NODE_ENV === 'development',
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
-      hasKey: !!process.env.NEXT_PUBLIC_PUSHER_KEY,
-      hasAppId: !!process.env.NEXT_PUBLIC_PUSHER_APP_ID,
-    });
+    const newName = generateTwoWordName();
+    setDisplayName(newName);
 
     // Set up Pusher connection handlers
     pusherClient.connection.bind('connected', () => {
@@ -49,12 +38,30 @@ export default function Home() {
       console.error('Pusher connection error:', err);
       setIsConnected(false);
       setError(`Connection error: ${err.message || 'Unknown error'}`);
+      
+      // Attempt to reconnect after a delay
+      setTimeout(() => {
+        console.log('Attempting to reconnect...');
+        pusherClient.connect();
+      }, 3000);
     });
 
     pusherClient.connection.bind('disconnected', () => {
       console.log('Pusher disconnected');
       setIsConnected(false);
       setError('Disconnected from server. Attempting to reconnect...');
+      
+      // Attempt to reconnect after a delay
+      setTimeout(() => {
+        console.log('Attempting to reconnect...');
+        pusherClient.connect();
+      }, 3000);
+    });
+
+    pusherClient.connection.bind('connecting', () => {
+      console.log('Connecting to Pusher...');
+      setIsConnected(false);
+      setError('Connecting to server...');
     });
 
     // Connect to Pusher
@@ -103,11 +110,6 @@ export default function Home() {
       setStudents(data.students);
     });
 
-    channel.bind('draw-update', (data: { studentId: string; drawData: any; canvasState: string }) => {
-      // Handle draw updates in the Whiteboard component
-      console.log('Draw update received:', data);
-    });
-
     return () => {
       pusherClient.unsubscribe(`classroom-${classCode}`);
     };
@@ -144,7 +146,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'join-classroom',
-          classCode: inputCode,
+          classCode: inputCode.toUpperCase(),
           studentId,
           displayName
         })
@@ -156,7 +158,7 @@ export default function Home() {
         return;
       }
 
-      setClassCode(inputCode);
+      setClassCode(inputCode.toUpperCase());
     } catch (err) {
       console.error('Error joining classroom:', err);
       setError('Failed to join classroom');
@@ -170,7 +172,7 @@ export default function Home() {
           <CardContent className="p-6">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
             <p className="text-center mt-4">
-              {error || 'Connecting to GalleryBoard server...'}
+              {error || 'Connecting to GalleryBoard server now...'}
             </p>
             {error && (
               <Button
@@ -291,7 +293,11 @@ export default function Home() {
       </Card>
       <Card>
         <CardContent className="p-6">
-          <Whiteboard socket={pusherClient} studentId={studentId} classCode={classCode} />
+          <Whiteboard
+            socket={pusherClient}
+            studentId={studentId}
+            classCode={classCode}
+          />
         </CardContent>
       </Card>
     </div>

@@ -19,5 +19,12 @@ export const pusherClient = new PusherClient(
   {
     cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
     forceTLS: true,
+    enabledTransports: ['ws', 'wss'],
+    authEndpoint: '/api/pusher/auth',
+    auth: {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
   }
 ); 

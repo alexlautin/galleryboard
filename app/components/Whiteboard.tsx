@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Pusher } from 'pusher-js';
+import type Pusher from 'pusher-js';
 import { Button } from "@/components/ui/button";
 import type { ClientToServerEvents, ServerToClientEvents, DrawData } from '@/types/socket';
 
@@ -29,17 +29,28 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     if (!ctx) return;
 
     // Set up canvas
-    ctx.strokeStyle = 'black';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     // Subscribe to draw updates
     const channel = socket.subscribe(`classroom-${classCode}`);
-    channel.bind('draw-update', (data: { studentId: string; drawData: any; canvasState: string }) => {
-      if (data.studentId !== studentId) {
+    
+    channel.bind('draw-update', (data: { 
+      studentId: string; 
+      drawData: DrawData | null; 
+      canvasState: string | null;
+    }) => {
+      // Skip if it's our own drawing and we're not the teacher
+      if (data.studentId === studentId && !isTeacher) return;
+
+      if (data.drawData) {
+        drawOnCanvas(data.drawData);
+      } else if (data.canvasState) {
         const img = new Image();
         img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(img, 0, 0);
         };
         img.src = data.canvasState;
@@ -47,9 +58,10 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     });
 
     return () => {
+      channel.unbind_all();
       socket.unsubscribe(`classroom-${classCode}`);
     };
-  }, [socket, classCode, studentId]);
+  }, [socket, classCode, studentId, color, width, isTeacher]);
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (isTeacher) return;
@@ -78,10 +90,14 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    ctx.beginPath();
-    ctx.moveTo(lastPoint.x, lastPoint.y);
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    const drawData: DrawData = {
+      points: [lastPoint, { x, y }],
+      color,
+      width,
+      type: tool
+    };
+
+    drawOnCanvas(drawData);
 
     // Send draw update
     fetch('/api/pusher', {
@@ -91,10 +107,10 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
         type: 'draw-update',
         classCode,
         studentId,
-        drawData: { from: lastPoint, to: { x, y } },
-        canvasState: canvas.toDataURL()
+        drawData,
+        canvasState: null // Don't send canvas state for intermediate updates
       })
-    });
+    }).catch(console.error);
 
     setLastPoint({ x, y });
   };
@@ -140,10 +156,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
 
     drawOnCanvas(drawData);
 
-    // Get current canvas state
-    const canvasState = canvas.toDataURL();
-    
-    // Emit both the draw data and canvas state
+    // Send draw update through Pusher API
     fetch('/api/pusher', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -151,10 +164,10 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
         type: 'draw-update',
         classCode,
         studentId,
-        drawData: { from: lastPoint, to: { x, y } },
-        canvasState
+        drawData,
+        canvasState: null // Don't send canvas state for intermediate updates
       })
-    });
+    }).catch(console.error);
 
     setLastPoint({ x, y });
   };
@@ -166,7 +179,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     // Send final canvas state when drawing ends
     const canvas = canvasRef.current;
     if (canvas && !isTeacher) {
-      const canvasState = canvas.toDataURL();
+      const canvasState = canvas.toDataURL('image/jpeg', 0.5); // Compress the image
       fetch('/api/pusher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -177,7 +190,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
           drawData: null,
           canvasState
         })
-      });
+      }).catch(console.error);
     }
   };
 
@@ -190,7 +203,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Send cleared canvas state
-    const canvasState = canvas.toDataURL();
+    const canvasState = canvas.toDataURL('image/jpeg', 0.5); // Compress the image
     fetch('/api/pusher', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -201,7 +214,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
         drawData: null,
         canvasState
       })
-    });
+    }).catch(console.error);
   };
 
   const drawOnCanvas = (drawData: DrawData) => {
@@ -222,6 +235,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     
     ctx.lineWidth = drawData.width;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
     for (let i = 1; i < drawData.points.length; i++) {
       ctx.lineTo(drawData.points[i].x, drawData.points[i].y);
