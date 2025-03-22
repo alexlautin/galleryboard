@@ -28,13 +28,11 @@ export default function Home() {
     const initSocket = async () => {
       try {
         // Initialize socket connection
-        const socketUrl = window.location.origin;
+        const socketUrl = 'http://localhost:3001';
         console.log('Connecting to socket at:', socketUrl);
 
         // Create socket instance
         socket = io(socketUrl, {
-          path: '/api/socket/io',
-          addTrailingSlash: false,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           autoConnect: true,

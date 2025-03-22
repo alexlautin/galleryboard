@@ -3,10 +3,12 @@ import { NextApiResponse } from 'next';
 import { Server as ServerIO } from 'socket.io';
 
 export interface DrawData {
-  points: { x: number; y: number }[];
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
   color: string;
   width: number;
-  type: 'draw' | 'erase';
 }
 
 export interface Student {
@@ -51,11 +53,31 @@ export interface ClientToServerEvents {
     studentId: string;
     displayName: string;
   }) => void;
+  'draw-start': (data: {
+    classCode: string;
+    studentId: string;
+    startX: number;
+    startY: number;
+    color: string;
+    width: number;
+  }) => void;
   'draw-update': (data: {
     classCode: string;
     studentId: string;
-    drawData: DrawData | null;
-    canvasState: string;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    color: string;
+    width: number;
+  }) => void;
+  'draw-end': (data: {
+    classCode: string;
+    studentId: string;
+  }) => void;
+  'clear-canvas': (data: {
+    classCode: string;
+    studentId: string;
   }) => void;
   'request-canvas-state': (data: {
     classCode: string;

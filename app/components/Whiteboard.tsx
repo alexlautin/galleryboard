@@ -28,9 +28,22 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Get the device pixel ratio
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Get the canvas size in CSS pixels
+    const rect = canvas.getBoundingClientRect();
+    
+    // Set the canvas size in actual pixels
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    
+    // Scale the context to account for the device pixel ratio
+    ctx.scale(dpr, dpr);
+    
     // Set white background
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, rect.width, rect.height);
 
     // Request initial canvas state if we're a teacher viewing a student's board
     if (isTeacher) {
@@ -119,6 +132,15 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
 
     setIsDrawing(true);
     setLastPoint({ x, y });
+
+    socket.emit('draw-start', {
+      classCode,
+      studentId,
+      startX: x / rect.width,
+      startY: y / rect.height,
+      color: tool === 'erase' ? '#ffffff' : color,
+      width: tool === 'erase' ? width * 2 : width
+    });
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -131,25 +153,28 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const drawData: DrawData = {
-      points: [lastPoint, { x, y }],
-      color,
-      width,
-      type: tool
-    };
+    if (lastPoint) {
+      socket.emit('draw-update', {
+        classCode,
+        studentId,
+        startX: lastPoint.x / rect.width,
+        startY: lastPoint.y / rect.height,
+        endX: x / rect.width,
+        endY: y / rect.height,
+        color: tool === 'erase' ? '#ffffff' : color,
+        width: tool === 'erase' ? width * 2 : width
+      });
 
-    drawOnCanvas(drawData);
-
-    // Get current canvas state
-    const canvasState = canvas.toDataURL();
-    
-    // Emit both the draw data and canvas state
-    socket.emit('draw-update', { 
-      classCode, 
-      studentId, 
-      drawData,
-      canvasState
-    });
+      drawOnCanvas({
+        points: [
+          { x: lastPoint.x / rect.width, y: lastPoint.y / rect.height },
+          { x: x / rect.width, y: y / rect.height }
+        ],
+        color: tool === 'erase' ? '#ffffff' : color,
+        width: tool === 'erase' ? width * 2 : width,
+        type: tool
+      });
+    }
 
     setLastPoint({ x, y });
   };
@@ -157,18 +182,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
   const handlePointerUp = () => {
     setIsDrawing(false);
     setLastPoint(null);
-
-    // Send final canvas state when drawing ends
-    const canvas = canvasRef.current;
-    if (canvas && !isTeacher) {
-      const canvasState = canvas.toDataURL();
-      socket.emit('draw-update', { 
-        classCode, 
-        studentId, 
-        drawData: null,
-        canvasState
-      });
-    }
+    socket.emit('draw-end', { classCode, studentId });
   };
 
   const clearCanvas = () => {
@@ -180,58 +194,56 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Send cleared canvas state
-    const canvasState = canvas.toDataURL();
-    socket.emit('draw-update', { 
-      classCode, 
-      studentId, 
-      drawData: null,
-      canvasState
-    });
+    socket.emit('clear-canvas', { classCode, studentId });
   };
 
   return (
-    <div className="relative border border-input rounded-lg shadow-md" onClick={onBoardClick}>
+    <div className="relative w-full aspect-[4/3] bg-white rounded-lg overflow-hidden">
       <canvas
         ref={canvasRef}
-        width={600}
-        height={400}
-        className="touch-none w-full h-full rounded-lg"
+        className="w-full h-full cursor-crosshair"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
       {!isTeacher && (
-        <div className="absolute bottom-4 left-4 flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 rounded-lg shadow-md border border-input">
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="w-8 h-8 rounded cursor-pointer"
-            />
-            <Button
-              onClick={() => setTool('draw')}
-              variant={tool === 'draw' ? 'default' : 'secondary'}
-              size="sm"
-            >
-              Draw
-            </Button>
-            <Button
-              onClick={() => setTool('erase')}
-              variant={tool === 'erase' ? 'default' : 'secondary'}
-              size="sm"
-            >
-              Erase
-            </Button>
-            <Button
-              onClick={clearCanvas}
-              variant="destructive"
-              size="sm"
-            >
-              Clear
-            </Button>
-          </div>
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 bg-white/90 p-2 rounded-lg shadow-lg">
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="w-8 h-8 rounded cursor-pointer"
+          />
+          <input
+            type="range"
+            min="1"
+            max="20"
+            value={width}
+            onChange={(e) => setWidth(Number(e.target.value))}
+            className="w-24"
+          />
+          <Button
+            variant={tool === 'draw' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setTool('draw')}
+          >
+            Draw
+          </Button>
+          <Button
+            variant={tool === 'erase' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setTool('erase')}
+          >
+            Erase
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearCanvas}
+          >
+            Clear
+          </Button>
         </div>
       )}
     </div>
