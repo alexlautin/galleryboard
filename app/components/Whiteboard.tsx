@@ -21,6 +21,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
   const [tool, setTool] = useState<'draw' | 'erase'>('draw');
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null);
 
+  // Set up high-resolution canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -28,11 +29,37 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Get the device pixel ratio
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Set the canvas size to be 2x the display size for high resolution
+    const displayWidth = 600;
+    const displayHeight = 400;
+    canvas.width = displayWidth * 2;
+    canvas.height = displayHeight * 2;
+    
+    // Scale the context to account for the higher resolution
+    ctx.scale(2, 2);
+    
     // Set up canvas
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    // Handle window resize
+    const handleResize = () => {
+      const rect = canvas.parentElement?.getBoundingClientRect();
+      if (!rect) return;
+      
+      // Update canvas size while maintaining aspect ratio
+      const scale = Math.min(rect.width / displayWidth, rect.height / displayHeight);
+      canvas.style.width = `${displayWidth * scale}px`;
+      canvas.style.height = `${displayHeight * scale}px`;
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Initial size
 
     // Subscribe to draw updates
     const channel = socket.subscribe(`classroom-${classCode}`);
@@ -64,8 +91,8 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
         const img = new Image();
         img.onload = () => {
           console.log('Canvas state image loaded, drawing to canvas');
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
+          ctx.clearRect(0, 0, displayWidth, displayHeight);
+          ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
         };
         img.onerror = (error) => {
           console.error('Error loading canvas state:', error);
@@ -76,23 +103,34 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
 
     return () => {
       console.log('Cleaning up Pusher subscription');
+      window.removeEventListener('resize', handleResize);
       channel.unbind_all();
       socket.unsubscribe(`classroom-${classCode}`);
     };
   }, [socket, classCode, studentId, color, width, isTeacher]);
 
+  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.PointerEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / (rect.width * 2); // Account for the 2x scaling
+    const scaleY = canvas.height / (rect.height * 2);
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    return { x, y };
+  };
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (isTeacher) return;
     
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const coords = getCanvasCoordinates(e);
+    if (!coords) return;
 
     setIsDrawing(true);
-    setLastPoint({ x, y });
+    setLastPoint(coords);
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -104,12 +142,11 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     const ctx = canvas.getContext('2d');
     if (!ctx || !lastPoint) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const coords = getCanvasCoordinates(e);
+    if (!coords) return;
 
     const drawData: DrawData = {
-      points: [lastPoint, { x, y }],
+      points: [lastPoint, coords],
       color,
       width,
       type: tool
@@ -130,7 +167,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
       })
     }).catch(console.error);
 
-    setLastPoint({ x, y });
+    setLastPoint(coords);
   };
 
   const stopDrawing = () => {
@@ -144,15 +181,11 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
       return;
     }
     
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const coords = getCanvasCoordinates(e);
+    if (!coords) return;
 
     setIsDrawing(true);
-    setLastPoint({ x, y });
+    setLastPoint(coords);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -161,12 +194,14 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const coords = getCanvasCoordinates(e);
+    if (!coords) return;
 
     const drawData: DrawData = {
-      points: [lastPoint, { x, y }],
+      points: [lastPoint, coords],
       color,
       width,
       type: tool
@@ -201,7 +236,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
       console.error('Error sending draw update:', error);
     });
 
-    setLastPoint({ x, y });
+    setLastPoint(coords);
   };
 
   const handlePointerUp = () => {
