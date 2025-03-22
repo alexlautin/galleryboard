@@ -26,6 +26,11 @@ export default function Home() {
     setStudentId(uniqueId);
     const newName = generateTwoWordName();
     setDisplayName(newName);
+    
+    console.log('Generated client identity:', {
+      studentId: uniqueId,
+      displayName: newName
+    });
 
     // Set up Pusher connection handlers
     pusherClient.connection.bind('connected', () => {
@@ -109,10 +114,12 @@ export default function Home() {
         event: 'student-joined',
         data,
         currentStudents: students,
-        isTeacher
+        isTeacher,
+        studentId,
+        currentStudentId: studentId
       });
       
-      // Update students list
+      // Update students list for both teacher and students
       setStudents(data.students);
       
       // Log the current state after update
@@ -120,7 +127,8 @@ export default function Home() {
         totalStudents: data.students.length,
         studentIds: data.students.map(s => s.id),
         isTeacher,
-        currentStudents: students
+        currentStudents: students,
+        filteredStudents: data.students.filter(s => s.id !== studentId)
       });
     });
 
@@ -134,20 +142,55 @@ export default function Home() {
       setStudents(data.students);
     });
 
+    channel.bind('draw-update', (data: { studentId: string; drawData: any; canvasState: string | null }) => {
+      console.log('Draw update received:', {
+        event: 'draw-update',
+        data,
+        currentStudents: students,
+        isTeacher,
+        studentId,
+        currentStudentId: studentId,
+        hasDrawData: !!data.drawData,
+        hasCanvasState: !!data.canvasState,
+        selectedStudent
+      });
+
+      // For teachers, ensure we're showing the correct student's whiteboard
+      if (isTeacher) {
+        console.log('Teacher received draw update:', {
+          studentId: data.studentId,
+          selectedStudent,
+          isSelectedStudent: data.studentId === selectedStudent,
+          drawData: data.drawData ? JSON.stringify(data.drawData) : 'null',
+          canvasState: data.canvasState ? `${Math.round(data.canvasState.length/1024)}KB` : 'null'
+        });
+
+        // If we're viewing a specific student's whiteboard, ensure it's the correct one
+        if (selectedStudent && data.studentId !== selectedStudent) {
+          console.log('Draw update for different student, ignoring');
+          return;
+        }
+      }
+    });
+
     channel.bind('teacher-update', (data: { studentId: string; displayName: string; students: Student[] }) => {
       console.log('Teacher update received:', {
         event: 'teacher-update',
         data,
         currentStudents: students,
-        isTeacher
+        isTeacher,
+        studentId,
+        currentStudentId: studentId
       });
       
+      // Only update students list for teacher
       if (isTeacher) {
         setStudents(data.students);
         console.log('Updated teacher dashboard with students:', {
           totalStudents: data.students.length,
           studentIds: data.students.map(s => s.id),
-          currentStudents: students
+          currentStudents: students,
+          filteredStudents: data.students.filter(s => s.id !== studentId)
         });
       }
     });
@@ -160,6 +203,19 @@ export default function Home() {
     // Log when the channel is successfully subscribed
     channel.bind('pusher:subscription_succeeded', () => {
       console.log('Successfully subscribed to channel:', `classroom-${classCode}`);
+      // Request initial state when channel is subscribed
+      if (isTeacher) {
+        console.log('Teacher requesting initial state');
+        fetch('/api/pusher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'request-canvas-state',
+            classCode,
+            studentId
+          })
+        }).catch(console.error);
+      }
     });
 
     // Log when the channel subscription fails
@@ -205,13 +261,33 @@ export default function Home() {
       setIsTeacher(true);
       setClassCode(data.classCode);
       
-      // Initialize students array with just the teacher
-      const initialStudents = [{
-        id: studentId,
-        displayName: 'Teacher'
-      }];
-      console.log('Initializing teacher dashboard with students:', initialStudents);
-      setStudents(initialStudents);
+      // Initialize students array with the data from the server
+      if (data.students) {
+        console.log('Initializing teacher dashboard with students from server:', data.students);
+        setStudents(data.students);
+      } else {
+        // Fallback to just the teacher if no students list is provided
+        const initialStudents = [{
+          id: studentId,
+          displayName: 'Teacher'
+        }];
+        console.log('Initializing teacher dashboard with default students:', initialStudents);
+        setStudents(initialStudents);
+      }
+
+      // Subscribe to the classroom channel immediately
+      const channel = pusherClient.subscribe(`classroom-${data.classCode}`);
+      console.log('Subscribed to channel:', `classroom-${data.classCode}`);
+
+      // Log when the channel is successfully subscribed
+      channel.bind('pusher:subscription_succeeded', () => {
+        console.log('Successfully subscribed to channel:', `classroom-${data.classCode}`);
+      });
+
+      // Log when the channel subscription fails
+      channel.bind('pusher:subscription_error', (error: any) => {
+        console.error('Failed to subscribe to channel:', error);
+      });
     } catch (err) {
       console.error('Error creating classroom:', err);
       setError('Failed to create classroom');
@@ -222,7 +298,13 @@ export default function Home() {
     if (!inputCode) return;
     
     try {
-      console.log('Joining classroom:', inputCode, 'as student:', studentId, 'with name:', displayName);
+      console.log('Joining classroom with identity:', {
+        classCode: inputCode.toUpperCase(),
+        studentId,
+        displayName,
+        isTeacher
+      });
+      
       const response = await fetch('/api/pusher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -230,12 +312,18 @@ export default function Home() {
           type: 'join-classroom',
           classCode: inputCode.toUpperCase(),
           studentId,
-          displayName
+          displayName,
+          isTeacher: false // Explicitly set isTeacher to false when joining
         })
       });
 
       const data = await response.json();
-      console.log('Join classroom response:', data);
+      console.log('Join classroom response:', {
+        data,
+        currentStudentId: studentId,
+        currentDisplayName: displayName,
+        isTeacher
+      });
       
       if (data.error) {
         console.error('Error joining classroom:', data.error);
@@ -246,7 +334,12 @@ export default function Home() {
       // Update the class code and students list
       setClassCode(inputCode.toUpperCase());
       if (data.students) {
-        console.log('Received student list from join response:', data.students);
+        console.log('Received student list from join response:', {
+          students: data.students,
+          currentStudentId: studentId,
+          currentDisplayName: displayName,
+          isTeacher
+        });
         setStudents(data.students);
       }
       
@@ -257,6 +350,14 @@ export default function Home() {
       // Log when the channel is successfully subscribed
       channel.bind('pusher:subscription_succeeded', () => {
         console.log('Successfully subscribed to channel:', `classroom-${inputCode.toUpperCase()}`);
+        // Log the current state after successful subscription
+        console.log('Student view state after subscription:', {
+          studentId,
+          displayName,
+          isTeacher,
+          classCode: inputCode.toUpperCase(),
+          students: data.students
+        });
       });
 
       // Log when the channel subscription fails
@@ -333,12 +434,23 @@ export default function Home() {
   }
 
   if (isTeacher) {
-    console.log('Rendering teacher dashboard:', {
+    const filteredStudents = students.filter(student => student.id !== studentId);
+    console.log('Teacher dashboard state:', {
       classCode,
       totalStudents: students.length,
-      studentIds: students.map(s => s.id),
-      selectedStudent,
-      students: students // Log full students array
+      allStudents: students.map(s => ({
+        id: s.id,
+        displayName: s.displayName,
+        isTeacher: s.id === studentId
+      })),
+      filteredStudents: filteredStudents.map(s => ({
+        id: s.id,
+        displayName: s.displayName
+      })),
+      currentStudentId: studentId,
+      currentDisplayName: displayName,
+      isTeacher,
+      selectedStudent
     });
     
     return (
@@ -348,8 +460,16 @@ export default function Home() {
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold">Class Code: {classCode}</h2>
-                <p className="text-muted-foreground">Connected Students: {students.filter(s => s.id !== studentId).length}</p>
-                <p className="text-sm text-muted-foreground">Debug: {students.length} total students</p>
+                <p className="text-muted-foreground">Connected Students: {filteredStudents.length}</p>
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm text-muted-foreground">Debug Info:</p>
+                  <p className="text-sm text-muted-foreground">Total Students: {students.length}</p>
+                  <p className="text-sm text-muted-foreground">All Students: {students.map(s => `${s.displayName} (${s.id})`).join(', ')}</p>
+                  <p className="text-sm text-muted-foreground">Filtered Students: {filteredStudents.map(s => `${s.displayName} (${s.id})`).join(', ')}</p>
+                  <p className="text-sm text-muted-foreground">Current User: {displayName} (ID: {studentId})</p>
+                  <p className="text-sm text-muted-foreground">Is Teacher: {isTeacher.toString()}</p>
+                  <p className="text-sm text-muted-foreground">Selected Student: {selectedStudent || 'none'}</p>
+                </div>
               </div>
               {selectedStudent && (
                 <Button
@@ -382,7 +502,7 @@ export default function Home() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {students.filter(student => student.id !== studentId).map((student) => (
+            {filteredStudents.map((student) => (
               <Card key={student.id} className="cursor-pointer hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <CardTitle className="text-lg">
@@ -396,7 +516,13 @@ export default function Home() {
                     studentId={student.id}
                     classCode={classCode}
                     isTeacher={true}
-                    onBoardClick={() => setSelectedStudent(student.id)}
+                    onBoardClick={() => {
+                      console.log('Student whiteboard clicked:', {
+                        studentId: student.id,
+                        displayName: student.displayName
+                      });
+                      setSelectedStudent(student.id);
+                    }}
                   />
                 </CardContent>
               </Card>
@@ -413,6 +539,14 @@ export default function Home() {
         <CardContent className="p-6">
           <h2 className="text-2xl font-bold">Class Code: {classCode}</h2>
           <p className="text-muted-foreground">Your Name: {displayName}</p>
+          <div className="mt-2 space-y-1">
+            <p className="text-sm text-muted-foreground">Debug Info:</p>
+            <p className="text-sm text-muted-foreground">Student ID: {studentId}</p>
+            <p className="text-sm text-muted-foreground">Display Name: {displayName}</p>
+            <p className="text-sm text-muted-foreground">Is Teacher: {isTeacher.toString()}</p>
+            <p className="text-sm text-muted-foreground">Connected Students: {students.length}</p>
+            <p className="text-sm text-muted-foreground">Student List: {students.map(s => `${s.displayName} (${s.id})`).join(', ')}</p>
+          </div>
         </CardContent>
       </Card>
       <Card>

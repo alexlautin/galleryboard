@@ -77,29 +77,75 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
         hasCanvasState: !!data.canvasState
       });
       
-      // Skip if it's our own drawing and we're not the teacher
-      if (data.studentId === studentId && !isTeacher) {
+      // For teachers, show all drawings
+      // For students, skip their own drawings
+      if (!isTeacher && data.studentId === studentId) {
         console.log('Skipping own drawing (not teacher)');
         return;
       }
 
-      if (data.drawData) {
-        console.log('Drawing with data:', data.drawData);
-        drawOnCanvas(data.drawData);
-      } else if (data.canvasState) {
+      // Handle canvas state updates first
+      if (data.canvasState) {
         console.log('Loading canvas state');
         const img = new Image();
         img.onload = () => {
           console.log('Canvas state image loaded, drawing to canvas');
+          // Clear the entire canvas first
           ctx.clearRect(0, 0, displayWidth, displayHeight);
+          // Draw the new state
           ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+          // Reset composite operation
+          ctx.globalCompositeOperation = 'source-over';
         };
         img.onerror = (error) => {
           console.error('Error loading canvas state:', error);
         };
         img.src = data.canvasState;
+        return; // Exit after handling canvas state
+      }
+
+      // Handle individual draw updates
+      if (data.drawData) {
+        console.log('Drawing with data:', data.drawData);
+        drawOnCanvas(data.drawData);
       }
     });
+
+    // Handle canvas state requests from teacher
+    channel.bind('request-canvas-state', (data: { teacherId: string }) => {
+      console.log('Received canvas state request from teacher:', data.teacherId);
+      if (!isTeacher) {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const canvasState = canvas.toDataURL('image/jpeg', 0.5); // Compress the image
+          fetch('/api/pusher', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'draw-update',
+              classCode,
+              studentId,
+              drawData: null,
+              canvasState
+            })
+          }).catch(console.error);
+        }
+      }
+    });
+
+    // Request initial canvas state when component mounts
+    if (isTeacher) {
+      console.log('Teacher view requesting initial canvas state');
+      fetch('/api/pusher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'request-canvas-state',
+          classCode,
+          studentId
+        })
+      }).catch(console.error);
+    }
 
     return () => {
       console.log('Cleaning up Pusher subscription');
@@ -155,6 +201,14 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     drawOnCanvas(drawData);
 
     // Send draw update
+    console.log('Sending draw update:', {
+      studentId,
+      classCode,
+      drawData,
+      hasDrawData: true,
+      hasCanvasState: false
+    });
+
     fetch('/api/pusher', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -163,9 +217,16 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
         classCode,
         studentId,
         drawData,
-        canvasState: null // Don't send canvas state for intermediate updates
+        canvasState: null
       })
-    }).catch(console.error);
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('Draw update response:', data);
+    })
+    .catch(error => {
+      console.error('Error sending draw update:', error);
+    });
 
     setLastPoint(coords);
   };
@@ -213,6 +274,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     console.log('Sending draw update:', {
       studentId,
       classCode,
+      drawData,
       hasDrawData: true,
       hasCanvasState: false
     });
@@ -225,7 +287,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
         classCode,
         studentId,
         drawData,
-        canvasState: null // Don't send canvas state for intermediate updates
+        canvasState: null
       })
     })
     .then(response => response.json())

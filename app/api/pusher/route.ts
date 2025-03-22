@@ -38,6 +38,7 @@ export async function POST(request: Request) {
           classCode = generateClassCode();
         } while (classrooms.has(classCode));
 
+        // Initialize classroom with teacher
         classrooms.set(classCode, {
           teacherId,
           students: new Map()
@@ -46,17 +47,53 @@ export async function POST(request: Request) {
         console.log(`Creating classroom ${classCode} for teacher ${teacherId}`);
 
         try {
+          // Send classroom created event
           await pusherServer.trigger(`classroom-${classCode}`, 'classroom-created', {
             classCode,
             teacherId
           });
           console.log('Classroom created event sent successfully');
+
+          // Send initial teacher-update event with just the teacher
+          const initialStudents = [{
+            id: teacherId,
+            displayName: 'Teacher'
+          }];
+
+          // Send student-joined event to ensure all clients have the initial state
+          await pusherServer.trigger(`classroom-${classCode}`, 'student-joined', {
+            studentId: teacherId,
+            displayName: 'Teacher',
+            students: initialStudents
+          });
+          console.log('Initial student-joined event sent successfully');
+
+          // Send teacher-update event
+          await pusherServer.trigger(`classroom-${classCode}`, 'teacher-update', {
+            studentId: teacherId,
+            displayName: 'Teacher',
+            students: initialStudents
+          });
+          console.log('Initial teacher update event sent successfully');
+
+          // Log the events that were sent
+          console.log('Events sent:', {
+            classroomCreated: { classCode, teacherId },
+            studentJoined: { studentId: teacherId, displayName: 'Teacher', students: initialStudents },
+            teacherUpdate: { studentId: teacherId, displayName: 'Teacher', students: initialStudents }
+          });
         } catch (error) {
-          console.error('Error triggering Pusher event:', error);
+          console.error('Error triggering Pusher events:', error);
           throw error;
         }
 
-        return NextResponse.json({ classCode });
+        return NextResponse.json({ 
+          classCode,
+          students: [{
+            id: teacherId,
+            displayName: 'Teacher'
+          }]
+        });
       }
 
       case 'join-classroom': {
@@ -118,8 +155,8 @@ export async function POST(request: Request) {
           
           // Send teacher-update event to ensure teacher has latest student list
           const teacherUpdateEvent = {
-            studentId,
-            displayName,
+            studentId: classroom.teacherId, // Use teacher's ID for teacher-update event
+            displayName: 'Teacher',
             students: allStudents
           };
           
@@ -158,7 +195,7 @@ export async function POST(request: Request) {
 
       case 'draw-update':
         console.log('Draw update from student', studentId, 'in classroom', classCode, 
-          'drawData:', drawData ? 'present' : 'null',
+          'drawData:', drawData ? JSON.stringify(drawData) : 'null',
           'canvasState:', canvasState ? `${Math.round(canvasState.length/1024)}KB` : 'null'
         );
         
@@ -173,7 +210,7 @@ export async function POST(request: Request) {
           // Check payload size to avoid 413 errors
           const payload = JSON.stringify(eventData);
           const payloadSize = Buffer.byteLength(payload, 'utf8');
-          console.log(`Payload size: ${Math.round(payloadSize/1024)}KB`);
+          console.log(`Payload size: ${Math.round(payloadSize/1024)}KB, Payload:`, payload);
           
           if (payloadSize > 9000) {
             console.log('Payload too large, sending without canvas state');
@@ -184,10 +221,11 @@ export async function POST(request: Request) {
               canvasState: null
             });
           } else {
+            // Send to all clients in the classroom
             await pusherServer.trigger(`classroom-${classCode}`, 'draw-update', eventData);
           }
           
-          console.log('Draw update event sent successfully');
+          console.log('Draw update event sent successfully to all clients');
           return NextResponse.json({ success: true });
         } catch (error) {
           console.error('Error sending draw update:', error);
@@ -197,10 +235,39 @@ export async function POST(request: Request) {
           }, { status: 500 });
         }
 
+      case 'request-canvas-state':
+        console.log('Canvas state requested by teacher', studentId, 'in classroom', classCode);
+        try {
+          // Broadcast to all students to send their canvas state
+          await pusherServer.trigger(`classroom-${classCode}`, 'request-canvas-state', {
+            teacherId: studentId
+          });
+          console.log('Canvas state request broadcast sent successfully');
+          return NextResponse.json({ success: true });
+        } catch (error) {
+          console.error('Error requesting canvas state:', error);
+          return NextResponse.json({ 
+            error: 'Failed to request canvas state', 
+            details: error instanceof Error ? error.message : 'Unknown error' 
+          }, { status: 500 });
+        }
+
       case 'leave-classroom': {
         const classroom = classrooms.get(classCode);
 
         if (classroom) {
+          // Log the current state before removing the student
+          console.log('Current classroom state before student leaves:', {
+            classCode,
+            studentId,
+            teacherId: classroom.teacherId,
+            currentStudents: Array.from(classroom.students.entries()).map(([id, data]) => ({
+              id,
+              displayName: data.displayName
+            }))
+          });
+
+          // Remove the student from the classroom
           classroom.students.delete(studentId);
           console.log(`Student ${studentId} leaving classroom ${classCode}`);
 
@@ -216,16 +283,32 @@ export async function POST(request: Request) {
             }))
           ];
 
+          console.log('Updated classroom state after student leaves:', {
+            classCode,
+            totalStudents: allStudents.length,
+            students: allStudents
+          });
+
           try {
+            // Send student-left event to all clients
             await pusherServer.trigger(`classroom-${classCode}`, 'student-left', {
               students: allStudents
             });
             console.log('Student left event sent successfully');
+
+            // Send teacher-update event to ensure teacher has latest student list
+            await pusherServer.trigger(`classroom-${classCode}`, 'teacher-update', {
+              studentId,
+              displayName: 'Teacher',
+              students: allStudents
+            });
+            console.log('Teacher update event sent successfully');
           } catch (error) {
-            console.error('Error triggering Pusher event:', error);
+            console.error('Error triggering Pusher events:', error);
             throw error;
           }
 
+          // Clean up empty classrooms
           if (classroom.students.size === 0 && classroom.teacherId === studentId) {
             classrooms.delete(classCode);
             console.log(`Classroom ${classCode} deleted`);
