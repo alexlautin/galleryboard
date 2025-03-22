@@ -7,13 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { generateTwoWordName } from '@/lib/name-generator';
+import type { ClientToServerEvents, ServerToClientEvents, Student as StudentType } from '@/types/socket';
 
-let socket: Socket;
+let socket: Socket<ServerToClientEvents, ClientToServerEvents>;
 
-interface Student {
-  id: string;
-  displayName: string;
-}
+interface Student extends StudentType {}
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
@@ -29,10 +27,9 @@ export default function Home() {
   useEffect(() => {
     // Initialize socket connection
     try {
-      socket = io('http://localhost:3001', {
-        transports: ['websocket'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
+      socket = io('/api/socket', {
+        path: '/api/socket',
+        addTrailingSlash: false
       });
 
       socket.on('connect', () => {
@@ -81,20 +78,20 @@ export default function Home() {
   }, []);
 
   const createClassroom = () => {
+    if (!socket.id) return;
     setIsTeacher(true);
     socket.emit('create-classroom', socket.id);
   };
 
   const joinClassroom = () => {
-    if (inputCode) {
-      console.log('Joining classroom with name:', displayName);
-      socket.emit('join-classroom', { 
-        classCode: inputCode, 
-        studentId: socket.id,
-        displayName: displayName
-      });
-      setClassCode(inputCode);
-    }
+    if (!socket.id || !inputCode) return;
+    console.log('Joining classroom with name:', displayName);
+    socket.emit('join-classroom', { 
+      classCode: inputCode, 
+      studentId: socket.id,
+      displayName: displayName
+    });
+    setClassCode(inputCode);
   };
 
   if (!isConnected) {

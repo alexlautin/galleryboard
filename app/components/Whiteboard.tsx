@@ -3,20 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Socket } from 'socket.io-client';
 import { Button } from "@/components/ui/button";
+import type { ClientToServerEvents, ServerToClientEvents, DrawData } from '@/types/socket';
 
 interface WhiteboardProps {
-  socket: Socket;
+  socket: Socket<ServerToClientEvents, ClientToServerEvents>;
   studentId: string;
   classCode: string;
   isTeacher?: boolean;
   onBoardClick?: () => void;
-}
-
-interface DrawData {
-  points: { x: number; y: number }[];
-  color: string;
-  width: number;
-  type: 'draw' | 'erase';
 }
 
 export default function Whiteboard({ socket, studentId, classCode, isTeacher, onBoardClick }: WhiteboardProps) {
