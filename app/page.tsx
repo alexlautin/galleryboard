@@ -123,7 +123,7 @@ export default function Home() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white">
         <Card className="w-100px max-w-xl border-none shadow-none">
-        <img src="/galleryboardlogo.jpeg" alt="Logo" className="h-15 w-auto" />
+        <img src="/galleryboardlogo.png" alt="Logo" className="h-15 w-auto" />
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold text-center text-black">GalleryBoard</CardTitle>
           </CardHeader>
