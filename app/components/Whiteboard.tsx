@@ -42,22 +42,40 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
       drawData: DrawData | null; 
       canvasState: string | null;
     }) => {
+      console.log('Received draw update:', {
+        studentId: data.studentId,
+        isTeacher,
+        currentStudentId: studentId,
+        hasDrawData: !!data.drawData,
+        hasCanvasState: !!data.canvasState
+      });
+      
       // Skip if it's our own drawing and we're not the teacher
-      if (data.studentId === studentId && !isTeacher) return;
+      if (data.studentId === studentId && !isTeacher) {
+        console.log('Skipping own drawing (not teacher)');
+        return;
+      }
 
       if (data.drawData) {
+        console.log('Drawing with data:', data.drawData);
         drawOnCanvas(data.drawData);
       } else if (data.canvasState) {
+        console.log('Loading canvas state');
         const img = new Image();
         img.onload = () => {
+          console.log('Canvas state image loaded, drawing to canvas');
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(img, 0, 0);
+        };
+        img.onerror = (error) => {
+          console.error('Error loading canvas state:', error);
         };
         img.src = data.canvasState;
       }
     });
 
     return () => {
+      console.log('Cleaning up Pusher subscription');
       channel.unbind_all();
       socket.unsubscribe(`classroom-${classCode}`);
     };
@@ -157,6 +175,13 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     drawOnCanvas(drawData);
 
     // Send draw update through Pusher API
+    console.log('Sending draw update:', {
+      studentId,
+      classCode,
+      hasDrawData: true,
+      hasCanvasState: false
+    });
+
     fetch('/api/pusher', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -167,7 +192,14 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
         drawData,
         canvasState: null // Don't send canvas state for intermediate updates
       })
-    }).catch(console.error);
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('Draw update response:', data);
+    })
+    .catch(error => {
+      console.error('Error sending draw update:', error);
+    });
 
     setLastPoint({ x, y });
   };
@@ -222,6 +254,8 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher = f
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx || !drawData?.points?.length) return;
 
+    console.log('Drawing points:', drawData.points);
+    
     ctx.beginPath();
     ctx.moveTo(drawData.points[0].x, drawData.points[0].y);
     

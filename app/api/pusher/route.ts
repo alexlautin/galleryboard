@@ -10,19 +10,29 @@ function generateClassCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    // Log request for debugging
+    const body = await request.json();
+    const { type, classCode, studentId, drawData, canvasState } = body;
+
     console.log('Pusher API request received');
+    console.log('Event type:', type);
+    console.log('Data:', JSON.stringify(body, null, 2));
 
-    const body = await req.json();
-    const { type, ...data } = body;
+    if (type !== 'create-classroom' && !classCode) {
+      return NextResponse.json({ error: 'Class code is required' }, { status: 400 });
+    }
 
-    console.log('Event type:', type, 'Data:', data);
+    const eventData = {
+      classCode,
+      studentId,
+      drawData,
+      canvasState
+    };
 
     switch (type) {
       case 'create-classroom': {
-        const { teacherId } = data;
+        const { teacherId } = body;
         let classCode: string;
         do {
           classCode = generateClassCode();
@@ -50,85 +60,165 @@ export async function POST(req: Request) {
       }
 
       case 'join-classroom': {
-        const { classCode, studentId, displayName } = data;
+        const { displayName } = body;
         const classroom = classrooms.get(classCode);
+
+        console.log('Processing join-classroom request:', {
+          classCode,
+          studentId,
+          displayName,
+          classroomExists: !!classroom,
+          currentStudents: classroom ? Array.from(classroom.students.entries()).map(([id, data]) => ({
+            id,
+            displayName: data.displayName
+          })) : []
+        });
 
         if (!classroom) {
           console.log(`Classroom ${classCode} not found`);
           return NextResponse.json({ error: 'Classroom not found' }, { status: 404 });
         }
 
-        classroom.students.set(studentId, { displayName });
-        console.log(`Student ${studentId} (${displayName}) joining classroom ${classCode}`);
+        // If student is already in the classroom, update their display name and send current state
+        if (classroom.students.has(studentId)) {
+          console.log(`Student ${studentId} reconnecting to classroom ${classCode}`);
+          classroom.students.set(studentId, { displayName });
+        } else {
+          // Add new student to classroom
+          classroom.students.set(studentId, { displayName });
+          console.log(`Student ${studentId} (${displayName}) joining classroom ${classCode}`);
+        }
+        
+        // Get current students list
+        const allStudents = [
+          {
+            id: classroom.teacherId,
+            displayName: 'Teacher'
+          },
+          ...Array.from(classroom.students.entries()).map(([id, data]) => ({
+            id,
+            displayName: data.displayName
+          }))
+        ];
+
+        console.log(`Current students in classroom ${classCode}:`, allStudents);
 
         try {
-          await pusherServer.trigger(`classroom-${classCode}`, 'student-joined', {
+          // Send student-joined event to all clients
+          const studentJoinedEvent = {
             studentId,
             displayName,
-            students: Array.from(classroom.students.entries()).map(([id, data]) => ({
-              id,
-              displayName: data.displayName
-            }))
-          });
+            students: allStudents
+          };
+          
+          console.log('Sending student-joined event:', studentJoinedEvent);
+          
+          await pusherServer.trigger(`classroom-${classCode}`, 'student-joined', studentJoinedEvent);
           console.log('Student joined event sent successfully');
+          
+          // Send teacher-update event to ensure teacher has latest student list
+          const teacherUpdateEvent = {
+            studentId,
+            displayName,
+            students: allStudents
+          };
+          
+          console.log('Sending teacher-update event:', teacherUpdateEvent);
+          
+          await pusherServer.trigger(`classroom-${classCode}`, 'teacher-update', teacherUpdateEvent);
+          console.log('Teacher update event sent successfully');
+
+          // Log the events that were sent
+          console.log('Events sent:', {
+            studentJoined: studentJoinedEvent,
+            teacherUpdate: teacherUpdateEvent
+          });
         } catch (error) {
-          console.error('Error triggering Pusher event:', error);
-          throw error;
+          console.error('Error triggering Pusher events:', error);
+          // Try to get more details about the error
+          if (error instanceof Error) {
+            console.error('Error details:', {
+              message: error.message,
+              stack: error.stack,
+              name: error.name
+            });
+          }
+          // Don't throw the error, just return it in the response
+          return NextResponse.json({ 
+            error: 'Failed to send events', 
+            details: error instanceof Error ? error.message : 'Unknown error' 
+          }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ 
+          success: true,
+          students: allStudents // Include the current student list in the response
+        });
       }
 
-      case 'draw-update': {
-        const { classCode, studentId, drawData, canvasState } = data;
-        console.log(`Draw update from student ${studentId} in classroom ${classCode}`);
-
+      case 'draw-update':
+        console.log('Draw update from student', studentId, 'in classroom', classCode, 
+          'drawData:', drawData ? 'present' : 'null',
+          'canvasState:', canvasState ? `${Math.round(canvasState.length/1024)}KB` : 'null'
+        );
+        
         try {
-          // Only send canvas state if it's provided and not too large
+          // Ensure we're sending the correct event data
           const eventData = {
             studentId,
             drawData,
-            canvasState: canvasState && canvasState.length < 10000 ? canvasState : null
+            canvasState
           };
-
-          await pusherServer.trigger(`classroom-${classCode}`, 'draw-update', eventData);
-          console.log('Draw update event sent successfully');
-        } catch (error) {
-          console.error('Error triggering Pusher event:', error);
-          // If the error is due to payload size, try sending without canvas state
-          if (error instanceof Error && error.message.includes('413')) {
-            try {
-              await pusherServer.trigger(`classroom-${classCode}`, 'draw-update', {
-                studentId,
-                drawData,
-                canvasState: null
-              });
-              console.log('Draw update event sent successfully without canvas state');
-            } catch (retryError) {
-              throw retryError;
-            }
+          
+          // Check payload size to avoid 413 errors
+          const payload = JSON.stringify(eventData);
+          const payloadSize = Buffer.byteLength(payload, 'utf8');
+          console.log(`Payload size: ${Math.round(payloadSize/1024)}KB`);
+          
+          if (payloadSize > 9000) {
+            console.log('Payload too large, sending without canvas state');
+            // Send without canvas state to reduce size
+            await pusherServer.trigger(`classroom-${classCode}`, 'draw-update', {
+              studentId,
+              drawData,
+              canvasState: null
+            });
           } else {
-            throw error;
+            await pusherServer.trigger(`classroom-${classCode}`, 'draw-update', eventData);
           }
+          
+          console.log('Draw update event sent successfully');
+          return NextResponse.json({ success: true });
+        } catch (error) {
+          console.error('Error sending draw update:', error);
+          return NextResponse.json({ 
+            error: 'Failed to send draw update', 
+            details: error instanceof Error ? error.message : 'Unknown error' 
+          }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true });
-      }
-
       case 'leave-classroom': {
-        const { classCode, studentId } = data;
         const classroom = classrooms.get(classCode);
 
         if (classroom) {
           classroom.students.delete(studentId);
           console.log(`Student ${studentId} leaving classroom ${classCode}`);
 
+          // Get all students including the teacher
+          const allStudents = [
+            {
+              id: classroom.teacherId,
+              displayName: 'Teacher'
+            },
+            ...Array.from(classroom.students.entries()).map(([id, data]) => ({
+              id,
+              displayName: data.displayName
+            }))
+          ];
+
           try {
             await pusherServer.trigger(`classroom-${classCode}`, 'student-left', {
-              students: Array.from(classroom.students.entries()).map(([id, data]) => ({
-                id,
-                displayName: data.displayName
-              }))
+              students: allStudents
             });
             console.log('Student left event sent successfully');
           } catch (error) {
@@ -151,9 +241,6 @@ export async function POST(req: Request) {
     }
   } catch (error) {
     console.error('Pusher API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 
