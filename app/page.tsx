@@ -27,9 +27,8 @@ export default function Home() {
   useEffect(() => {
     // Initialize socket connection
     try {
-      socket = io('/api/socket', {
-        path: '/api/socket',
-        addTrailingSlash: false
+      socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001', {
+        transports: ['websocket']
       });
 
       socket.on('connect', () => {
