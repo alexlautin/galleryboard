@@ -29,9 +29,6 @@ export default function Home() {
       try {
         // Initialize socket connection
         const socketUrl = 'http://localhost:3001';
-        console.log('Connecting to socket at:', socketUrl);
-
-        // Create socket instance
         socket = io(socketUrl, {
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
@@ -40,36 +37,26 @@ export default function Home() {
 
         // Set up event listeners
         socket.on('connect', () => {
-          console.log('Connected to server with ID:', socket.id);
           setIsConnected(true);
           setError(null);
           if (socket.id) {
             setStudentId(socket.id);
             const newName = generateTwoWordName();
             setDisplayName(newName);
-            console.log('Generated name:', newName);
           }
         });
 
         socket.on('connect_error', (err) => {
-          console.error('Connection error:', err);
-          setError('Failed to connect to GalleryBoard server. Please try connecting again.');
+          setError('Failed to connect to GalleryBoard server. Please try again.');
           setIsConnected(false);
         });
 
         socket.on('classroom-created', ({ classCode: newClassCode }) => {
-          console.log('Classroom created:', newClassCode);
           setClassCode(newClassCode);
         });
 
-        socket.on('student-joined', ({ studentId, displayName, students: updatedStudents }) => {
-          console.log('Student joined:', { studentId, displayName });
+        socket.on('student-joined', ({ students: updatedStudents }) => {
           setStudents(updatedStudents);
-        });
-
-        socket.on('name-assigned', ({ displayName: assignedName }) => {
-          console.log('Name assigned:', assignedName);
-          setDisplayName(assignedName);
         });
 
         socket.on('student-left', ({ students: updatedStudents }) => {
@@ -79,7 +66,6 @@ export default function Home() {
         // Initialize connection
         await fetch('/api/socket/io');
       } catch (err) {
-        console.error('Socket initialization error:', err);
         setError('Failed to initialize connection. Please refresh the page.');
       }
     };
@@ -101,22 +87,21 @@ export default function Home() {
 
   const joinClassroom = () => {
     if (!socket.id || !inputCode) return;
-    console.log('Joining classroom with name:', displayName);
-    socket.emit('join-classroom', { 
-      classCode: inputCode, 
+    socket.emit('join-classroom', {
+      classCode: inputCode,
       studentId: socket.id,
-      displayName: displayName
+      displayName: displayName,
     });
     setClassCode(inputCode);
   };
 
   if (!isConnected) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex items-center justify-center min-h-screen bg-white">
         <Card className="w-full max-w-md">
           <CardContent className="p-6 space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="text-center text-foreground">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="text-center text-gray-700">
               {error || 'Connecting to GalleryBoard server...'}
             </p>
             {error && (
@@ -136,17 +121,17 @@ export default function Home() {
 
   if (!classCode) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-        <Card className="w-full max-w-md">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white">
+        <Card className="w-100px max-w-xl border-none shadow-none">
+        <img src="/galleryboardlogo.jpeg" alt="Logo" className="h-15 w-auto" />
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">GalleryBoard</CardTitle>
+            <CardTitle className="text-2xl font-bold text-center text-black">GalleryBoard</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Button 
               onClick={createClassroom}
-              className="w-full"
+              className="w-full bg-blue-500 text-white hover:bg-blue-600"
               size="lg"
-              variant="default"
             >
               Create Classroom (Teacher)
             </Button>
@@ -160,9 +145,9 @@ export default function Home() {
               />
               <Button 
                 onClick={joinClassroom}
-                variant="secondary"
+                variant="outline"
                 size="lg"
-                className="w-full"
+                className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
               >
                 Join Classroom
               </Button>
@@ -175,18 +160,19 @@ export default function Home() {
 
   if (isTeacher) {
     return (
-      <div className="p-8 bg-background">
+      <div className="p-8 bg-white">
         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-bold text-foreground">Class Code: {classCode}</h2>
-                <p className="text-muted-foreground">Connected Students: {students.length}</p>
+                <h2 className="text-2xl font-bold text-black">Class Code: {classCode}</h2>
+                <p className="text-gray-500">Connected Students: {students.length}</p>
               </div>
               {selectedStudent && (
                 <Button
                   onClick={() => setSelectedStudent(null)}
                   variant="outline"
+                  className="text-blue-600 border-blue-600 hover:bg-blue-50"
                 >
                   Back to Grid
                 </Button>
@@ -209,18 +195,15 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {students.map((student) => (
-              <Card key={student.id} className="cursor-pointer hover:shadow-lg transition-shadow">
+              <Card key={student.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setSelectedStudent(student.id)}>
                 <CardContent className="p-4">
                   <Whiteboard
                     socket={socket}
                     studentId={student.id}
                     classCode={classCode}
                     isTeacher={true}
-                    onBoardClick={() => setSelectedStudent(student.id)}
                   />
-                  <p className="mt-2 text-center text-sm text-muted-foreground">
-                    {student.displayName}
-                  </p>
+                  <p className="mt-2 text-center text-sm text-black">{student.displayName}</p>
                 </CardContent>
               </Card>
             ))}
@@ -231,11 +214,11 @@ export default function Home() {
   }
 
   return (
-    <div className="p-8 bg-background">
+    <div className="p-8 bg-white">
       <Card className="mb-6">
         <CardContent className="p-6">
-          <h2 className="text-2xl font-bold text-foreground">Class Code: {classCode}</h2>
-          <p className="text-muted-foreground">Your Name: {displayName}</p>
+          <h2 className="text-2xl font-bold text-gray-700">Class Code: {classCode}</h2>
+          <p className="text-gray-500">Your Name: {displayName}</p>
         </CardContent>
       </Card>
       <Card>
@@ -245,4 +228,4 @@ export default function Home() {
       </Card>
     </div>
   );
-} 
+}
