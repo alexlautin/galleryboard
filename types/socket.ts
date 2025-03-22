@@ -3,12 +3,10 @@ import { NextApiResponse } from 'next';
 import { Server as ServerIO } from 'socket.io';
 
 export interface DrawData {
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
+  points: { x: number; y: number }[];
   color: string;
   width: number;
+  type: 'draw' | 'erase';
 }
 
 export interface Student {

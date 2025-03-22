@@ -9,6 +9,7 @@ export const runtime = 'nodejs';
 const classrooms = new Map<string, {
   teacherId: string;
   students: Map<string, { displayName: string }>;
+  canvasStates: Map<string, string>;
 }>();
 
 function generateClassCode() {
@@ -36,7 +37,8 @@ if (!global.io) {
 
       classrooms.set(classCode, {
         teacherId,
-        students: new Map()
+        students: new Map(),
+        canvasStates: new Map()
       });
 
       socket.join(classCode);
@@ -66,6 +68,15 @@ if (!global.io) {
         }))
       });
 
+      // Send existing canvas state to the new student if available
+      const canvasState = classroom.canvasStates.get(studentId);
+      if (canvasState) {
+        socket.emit('load-canvas', {
+          studentId,
+          canvasData: canvasState
+        });
+      }
+
       // Confirm the display name to the joining student
       socket.emit('name-assigned', { displayName });
     });
@@ -77,13 +88,34 @@ if (!global.io) {
       canvasState: string;
     }) => {
       const { classCode, studentId, drawData, canvasState } = data;
+      const classroom = classrooms.get(classCode);
       
-      // Broadcast the drawing update to all clients in the classroom
-      socket.to(classCode).emit('draw-update-received', {
-        studentId,
-        drawData,
-        canvasState
-      });
+      if (classroom) {
+        // Store the canvas state
+        classroom.canvasStates.set(studentId, canvasState);
+        
+        // Broadcast the drawing update to all clients in the classroom
+        global.io.to(classCode).emit('draw-update-received', {
+          studentId,
+          drawData,
+          canvasState
+        });
+      }
+    });
+
+    socket.on('request-canvas-state', (data: { classCode: string; studentId: string }) => {
+      const { classCode, studentId } = data;
+      const classroom = classrooms.get(classCode);
+      
+      if (classroom) {
+        const canvasState = classroom.canvasStates.get(studentId);
+        if (canvasState) {
+          socket.emit('canvas-state-update', {
+            studentId,
+            canvasState
+          });
+        }
+      }
     });
 
     socket.on('disconnecting', () => {
@@ -92,6 +124,7 @@ if (!global.io) {
       for (const [code, classroom] of classrooms.entries()) {
         if (classroom.students.has(socket.id)) {
           classroom.students.delete(socket.id);
+          classroom.canvasStates.delete(socket.id);
           global.io.to(code).emit('student-left', { 
             students: Array.from(classroom.students.entries()).map(([id, data]) => ({
               id,
