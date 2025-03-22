@@ -112,18 +112,18 @@ export default function Home() {
 
   if (!isConnected) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card>
-          <CardContent className="p-6">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-            <p className="text-center mt-4">
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="text-center text-foreground">
               {error || 'Connecting to GalleryBoard server...'}
             </p>
             {error && (
               <Button
                 onClick={() => window.location.reload()}
                 variant="outline"
-                className="mt-4 w-full"
+                className="w-full"
               >
                 Retry Connection
               </Button>
@@ -136,16 +136,17 @@ export default function Home() {
 
   if (!classCode) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">GalleryBoard</CardTitle>
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl font-bold text-center">GalleryBoard</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Button 
               onClick={createClassroom}
               className="w-full"
               size="lg"
+              variant="default"
             >
               Create Classroom (Teacher)
             </Button>
@@ -161,6 +162,7 @@ export default function Home() {
                 onClick={joinClassroom}
                 variant="secondary"
                 size="lg"
+                className="w-full"
               >
                 Join Classroom
               </Button>
@@ -173,12 +175,12 @@ export default function Home() {
 
   if (isTeacher) {
     return (
-      <div className="p-8">
+      <div className="p-8 bg-background">
         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-bold">Class Code: {classCode}</h2>
+                <h2 className="text-2xl font-bold text-foreground">Class Code: {classCode}</h2>
                 <p className="text-muted-foreground">Connected Students: {students.length}</p>
               </div>
               {selectedStudent && (
@@ -229,10 +231,10 @@ export default function Home() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 bg-background">
       <Card className="mb-6">
         <CardContent className="p-6">
-          <h2 className="text-2xl font-bold">Class Code: {classCode}</h2>
+          <h2 className="text-2xl font-bold text-foreground">Class Code: {classCode}</h2>
           <p className="text-muted-foreground">Your Name: {displayName}</p>
         </CardContent>
       </Card>
