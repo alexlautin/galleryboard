@@ -1,20 +1,6 @@
 import { Server } from 'socket.io';
 import { createServer } from 'http';
-import express from 'express';
-import cors from 'cors';
-
-const app = express();
-app.use(cors());
-
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? 'https://your-production-url.vercel.app' 
-      : 'http://localhost:3000',
-    methods: ["GET", "POST"]
-  }
-});
+import { parse } from 'url';
 
 const classrooms = new Map<string, {
   teacherId: string;
@@ -24,6 +10,17 @@ const classrooms = new Map<string, {
 function generateClassCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
+
+const io = new Server({
+  cors: {
+    origin: process.env.VERCEL_URL ? [
+      `https://${process.env.VERCEL_URL}`,
+      'https://galleryboard.vercel.app'
+    ] : ['http://localhost:3000'],
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
@@ -108,7 +105,32 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
-  console.log(`Socket.IO server running on port ${PORT}`);
-}); 
+// Create an HTTP server if we're not in Vercel
+if (!process.env.VERCEL_URL) {
+  const httpServer = createServer((req, res) => {
+    const { pathname } = parse(req.url || '');
+    if (pathname === '/socket.io') {
+      res.writeHead(200).end('Socket.IO server running');
+      return;
+    }
+    res.writeHead(404).end();
+  });
+  
+  io.attach(httpServer);
+  
+  const PORT = process.env.PORT || 3001;
+  httpServer.listen(PORT, () => {
+    console.log(`Socket.IO server running on port ${PORT}`);
+  });
+}
+
+// Export the socket.io instance for Vercel
+export default function handler(req: any, res: any) {
+  if (!res.socket.server.io) {
+    console.log('*First use, starting socket.io');
+    res.socket.server.io = io;
+  } else {
+    console.log('socket.io already running');
+  }
+  res.end();
+} 
