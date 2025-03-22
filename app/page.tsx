@@ -53,6 +53,8 @@ export default function Home() {
 
         socket.on('classroom-created', ({ classCode: newClassCode }) => {
           setClassCode(newClassCode);
+          // Update the URL with the classCode
+          window.history.pushState(null, '', `?classCode=${newClassCode}&mode=${isTeacher ? 'teacher' : 'student'}`);
         });
 
         socket.on('student-joined', ({ students: updatedStudents }) => {
@@ -77,7 +79,7 @@ export default function Home() {
         socket.disconnect();
       }
     };
-  }, []);
+  }, [isTeacher]);
 
   const createClassroom = () => {
     if (!socket.id) return;
@@ -93,9 +95,35 @@ export default function Home() {
       displayName: displayName,
     });
     setClassCode(inputCode);
+    // Update the URL with the classCode
+    window.history.pushState(null, '', `?classCode=${inputCode}&mode=student`);
   };
 
-  if (!isConnected) {
+  useEffect(() => {
+    // Check if there's a classCode and mode in the URL on initial load
+    const params = new URLSearchParams(window.location.search);
+    const classCodeFromUrl = params.get('classCode');
+    const modeFromUrl = params.get('mode');
+    if (classCodeFromUrl) {
+      setClassCode(classCodeFromUrl);
+      if (modeFromUrl === 'teacher') {
+        setIsTeacher(true);
+      } else {
+        setIsTeacher(false);
+      }
+      socket.emit('join-classroom', {
+        classCode: classCodeFromUrl,
+        studentId: studentId,
+        displayName: displayName,
+      });
+    }
+  }, [studentId, displayName]);
+
+  // Filter out the teacher from the list of students (if any)
+  const filteredStudents = students.filter(student => student.id !== studentId);
+
+  // Only render students after the state has been populated
+  if (!isConnected || !students.length) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
         <Card className="w-full max-w-md">
@@ -122,8 +150,8 @@ export default function Home() {
   if (!classCode) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white">
-        <Card className="w-100px max-w-xl border-none shadow-none">
-        <img src="/galleryboardlogo.png" alt="Logo" className="h-15 w-auto" />
+        <img src="/galleryboardlogo.jpeg" alt="Logo" className="h-10 w-auto" />
+        <Card className="w-full max-w-md">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold text-center text-black">GalleryBoard</CardTitle>
           </CardHeader>
@@ -166,7 +194,7 @@ export default function Home() {
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold text-black">Class Code: {classCode}</h2>
-                <p className="text-gray-500">Connected Students: {students.length}</p>
+                <p className="text-gray-500">Connected Students: {filteredStudents.length}</p>
               </div>
               {selectedStudent && (
                 <Button
@@ -194,19 +222,23 @@ export default function Home() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {students.map((student) => (
-              <Card key={student.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setSelectedStudent(student.id)}>
-                <CardContent className="p-4">
-                  <Whiteboard
-                    socket={socket}
-                    studentId={student.id}
-                    classCode={classCode}
-                    isTeacher={true}
-                  />
-                  <p className="mt-2 text-center text-sm text-black">{student.displayName}</p>
-                </CardContent>
-              </Card>
-            ))}
+            {filteredStudents.length > 0 ? (
+              filteredStudents.map((student) => (
+                <Card key={student.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setSelectedStudent(student.id)}>
+                  <CardContent className="p-4">
+                    <Whiteboard
+                      socket={socket}
+                      studentId={student.id}
+                      classCode={classCode}
+                      isTeacher={true}
+                    />
+                    <p className="mt-2 text-center text-sm text-black">{student.displayName}</p>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <p className="text-center text-gray-500">No students connected yet</p>
+            )}
           </div>
         )}
       </div>
