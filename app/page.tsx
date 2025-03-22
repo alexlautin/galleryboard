@@ -1,13 +1,17 @@
-'use client';
-
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import Whiteboard from './components/Whiteboard';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { generateTwoWordName } from '@/lib/name-generator';
 
 let socket: Socket;
+
+interface Student {
+  id: string;
+  displayName: string;
+}
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
@@ -15,9 +19,10 @@ export default function Home() {
   const [classCode, setClassCode] = useState('');
   const [inputCode, setInputCode] = useState('');
   const [studentId, setStudentId] = useState('');
-  const [students, setStudents] = useState<string[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState('');
 
   useEffect(() => {
     // Initialize socket connection
@@ -34,6 +39,9 @@ export default function Home() {
         setError(null);
         if (socket.id) {
           setStudentId(socket.id);
+          const newName = generateTwoWordName();
+          setDisplayName(newName);
+          console.log('Generated name:', newName);
         }
       });
 
@@ -47,12 +55,18 @@ export default function Home() {
         setClassCode(newClassCode);
       });
 
-      socket.on('student-joined', ({ studentId, students: updatedStudents }: { studentId: string, students: Array<{ id: string }> }) => {
-        setStudents(updatedStudents.map(s => s.id));
+      socket.on('student-joined', ({ studentId, displayName, students: updatedStudents }: { studentId: string, displayName: string, students: Student[] }) => {
+        console.log('Student joined:', { studentId, displayName });
+        setStudents(updatedStudents);
       });
 
-      socket.on('student-left', ({ students: updatedStudents }: { students: Array<{ id: string }> }) => {
-        setStudents(updatedStudents.map(s => s.id));
+      socket.on('name-assigned', ({ displayName: assignedName }: { displayName: string }) => {
+        console.log('Name assigned:', assignedName);
+        setDisplayName(assignedName);
+      });
+
+      socket.on('student-left', ({ students: updatedStudents }: { students: Student[] }) => {
+        setStudents(updatedStudents);
       });
 
       return () => {
@@ -71,7 +85,12 @@ export default function Home() {
 
   const joinClassroom = () => {
     if (inputCode) {
-      socket.emit('join-classroom', { classCode: inputCode, studentId: socket.id });
+      console.log('Joining classroom with name:', displayName);
+      socket.emit('join-classroom', { 
+        classCode: inputCode, 
+        studentId: socket.id,
+        displayName: displayName
+      });
       setClassCode(inputCode);
     }
   };
@@ -173,17 +192,17 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {students.map((student) => (
-              <Card key={student} className="cursor-pointer hover:shadow-lg transition-shadow">
+              <Card key={student.id} className="cursor-pointer hover:shadow-lg transition-shadow">
                 <CardContent className="p-4">
                   <Whiteboard
                     socket={socket}
-                    studentId={student}
+                    studentId={student.id}
                     classCode={classCode}
                     isTeacher={true}
-                    onBoardClick={() => setSelectedStudent(student)}
+                    onBoardClick={() => setSelectedStudent(student.id)}
                   />
                   <p className="mt-2 text-center text-sm text-muted-foreground">
-                    Student {student.slice(0, 6)}
+                    {student.displayName}
                   </p>
                 </CardContent>
               </Card>
@@ -199,6 +218,7 @@ export default function Home() {
       <Card className="mb-6">
         <CardContent className="p-6">
           <h2 className="text-2xl font-bold">Class Code: {classCode}</h2>
+          <p className="text-muted-foreground">Your Name: {displayName}</p>
         </CardContent>
       </Card>
       <Card>
@@ -208,4 +228,4 @@ export default function Home() {
       </Card>
     </div>
   );
-}
+} 
