@@ -1,17 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { pusherClient } from '@/lib/pusher';
 import Whiteboard from './components/Whiteboard';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { generateTwoWordName } from '@/lib/name-generator';
-import type { ClientToServerEvents, ServerToClientEvents, Student as StudentType } from '@/types/socket';
 
-let socket: Socket<ServerToClientEvents, ClientToServerEvents>;
-
-interface Student extends StudentType {}
+interface Student {
+  id: string;
+  displayName: string;
+}
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
@@ -25,91 +25,142 @@ export default function Home() {
   const [displayName, setDisplayName] = useState('');
 
   useEffect(() => {
-    const initSocket = async () => {
-      try {
-        // Initialize socket connection
-        const socketUrl = window.location.origin;
-        console.log('Connecting to socket at:', socketUrl);
+    // Generate a unique ID for this client
+    const uniqueId = Math.random().toString(36).substring(2, 15);
+    setStudentId(uniqueId);
+    setDisplayName(generateTwoWordName());
 
-        // Create socket instance
-        socket = io(socketUrl, {
-          path: '/api/socket/io',
-          addTrailingSlash: false,
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
-          autoConnect: true,
-        });
+    // Log environment variables (without sensitive data)
+    console.log('Environment:', {
+      isDev: process.env.NODE_ENV === 'development',
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
+      hasKey: !!process.env.NEXT_PUBLIC_PUSHER_KEY,
+      hasAppId: !!process.env.NEXT_PUBLIC_PUSHER_APP_ID,
+    });
 
-        // Set up event listeners
-        socket.on('connect', () => {
-          console.log('Connected to server with ID:', socket.id);
-          setIsConnected(true);
-          setError(null);
-          if (socket.id) {
-            setStudentId(socket.id);
-            const newName = generateTwoWordName();
-            setDisplayName(newName);
-            console.log('Generated name:', newName);
-          }
-        });
+    // Set up Pusher connection handlers
+    pusherClient.connection.bind('connected', () => {
+      console.log('Pusher connected successfully');
+      setIsConnected(true);
+      setError(null);
+    });
 
-        socket.on('connect_error', (err) => {
-          console.error('Connection error:', err);
-          setError('Failed to connect to GalleryBoard server. Please try connecting again.');
-          setIsConnected(false);
-        });
+    pusherClient.connection.bind('error', (err: any) => {
+      console.error('Pusher connection error:', err);
+      setIsConnected(false);
+      setError(`Connection error: ${err.message || 'Unknown error'}`);
+    });
 
-        socket.on('classroom-created', ({ classCode: newClassCode }) => {
-          console.log('Classroom created:', newClassCode);
-          setClassCode(newClassCode);
-        });
+    pusherClient.connection.bind('disconnected', () => {
+      console.log('Pusher disconnected');
+      setIsConnected(false);
+      setError('Disconnected from server. Attempting to reconnect...');
+    });
 
-        socket.on('student-joined', ({ studentId, displayName, students: updatedStudents }) => {
-          console.log('Student joined:', { studentId, displayName });
-          setStudents(updatedStudents);
-        });
-
-        socket.on('name-assigned', ({ displayName: assignedName }) => {
-          console.log('Name assigned:', assignedName);
-          setDisplayName(assignedName);
-        });
-
-        socket.on('student-left', ({ students: updatedStudents }) => {
-          setStudents(updatedStudents);
-        });
-
-        // Initialize connection
-        await fetch('/api/socket/io');
-      } catch (err) {
-        console.error('Socket initialization error:', err);
-        setError('Failed to initialize connection. Please refresh the page.');
-      }
-    };
-
-    initSocket();
+    // Connect to Pusher
+    if (pusherClient.connection.state !== 'connected') {
+      console.log('Initializing Pusher connection...');
+      pusherClient.connect();
+    }
 
     return () => {
-      if (socket) {
-        socket.disconnect();
+      if (classCode) {
+        // Clean up when component unmounts
+        fetch('/api/pusher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'leave-classroom',
+            classCode,
+            studentId: uniqueId
+          })
+        }).catch(console.error);
       }
+
+      // Cleanup Pusher connection
+      pusherClient.disconnect();
+      pusherClient.connection.unbind_all();
     };
   }, []);
 
-  const createClassroom = () => {
-    if (!socket.id) return;
-    setIsTeacher(true);
-    socket.emit('create-classroom', socket.id);
+  useEffect(() => {
+    if (!classCode) return;
+
+    // Subscribe to classroom events
+    const channel = pusherClient.subscribe(`classroom-${classCode}`);
+
+    channel.bind('classroom-created', (data: { classCode: string; teacherId: string }) => {
+      console.log('Classroom created:', data.classCode);
+      setClassCode(data.classCode);
+    });
+
+    channel.bind('student-joined', (data: { studentId: string; displayName: string; students: Student[] }) => {
+      console.log('Student joined:', data);
+      setStudents(data.students);
+    });
+
+    channel.bind('student-left', (data: { students: Student[] }) => {
+      setStudents(data.students);
+    });
+
+    channel.bind('draw-update', (data: { studentId: string; drawData: any; canvasState: string }) => {
+      // Handle draw updates in the Whiteboard component
+      console.log('Draw update received:', data);
+    });
+
+    return () => {
+      pusherClient.unsubscribe(`classroom-${classCode}`);
+    };
+  }, [classCode]);
+
+  const createClassroom = async () => {
+    try {
+      const response = await fetch('/api/pusher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'create-classroom',
+          teacherId: studentId
+        })
+      });
+
+      const data = await response.json();
+      if (data.classCode) {
+        setIsTeacher(true);
+        setClassCode(data.classCode);
+      }
+    } catch (err) {
+      console.error('Error creating classroom:', err);
+      setError('Failed to create classroom');
+    }
   };
 
-  const joinClassroom = () => {
-    if (!socket.id || !inputCode) return;
-    console.log('Joining classroom with name:', displayName);
-    socket.emit('join-classroom', { 
-      classCode: inputCode, 
-      studentId: socket.id,
-      displayName: displayName
-    });
-    setClassCode(inputCode);
+  const joinClassroom = async () => {
+    if (!inputCode) return;
+    
+    try {
+      const response = await fetch('/api/pusher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'join-classroom',
+          classCode: inputCode,
+          studentId,
+          displayName
+        })
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
+
+      setClassCode(inputCode);
+    } catch (err) {
+      console.error('Error joining classroom:', err);
+      setError('Failed to join classroom');
+    }
   };
 
   if (!isConnected) {
@@ -199,7 +250,7 @@ export default function Home() {
           <Card>
             <CardContent className="p-6">
               <Whiteboard
-                socket={socket}
+                socket={pusherClient}
                 studentId={selectedStudent}
                 classCode={classCode}
                 isTeacher={true}
@@ -212,7 +263,7 @@ export default function Home() {
               <Card key={student.id} className="cursor-pointer hover:shadow-lg transition-shadow">
                 <CardContent className="p-4">
                   <Whiteboard
-                    socket={socket}
+                    socket={pusherClient}
                     studentId={student.id}
                     classCode={classCode}
                     isTeacher={true}
@@ -240,7 +291,7 @@ export default function Home() {
       </Card>
       <Card>
         <CardContent className="p-6">
-          <Whiteboard socket={socket} studentId={studentId} classCode={classCode} />
+          <Whiteboard socket={pusherClient} studentId={studentId} classCode={classCode} />
         </CardContent>
       </Card>
     </div>

@@ -1,10 +1,11 @@
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import { NextApiResponseServerIO } from '@/types/socket';
+import { Server as SocketIOServer } from 'socket.io';
 import { NextResponse } from 'next/server';
+import type { NextApiResponseServerIO } from '@/types/socket';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+let io: SocketIOServer;
 
 const classrooms = new Map<string, {
   teacherId: string;
@@ -18,17 +19,16 @@ function generateClassCode() {
 // Create a map to store active connections
 const connections = new Map();
 
-// Socket.IO handler
-const ioHandler = (req: Request, res: NextApiResponseServerIO) => {
-  if (!res.socket.server.io) {
-    const httpServer = res.socket.server as any;
-    const io = new Server(httpServer, {
+export async function GET(req: Request) {
+  if (!io) {
+    io = new SocketIOServer({
       path: '/api/socket/io',
       addTrailingSlash: false,
       cors: {
         origin: '*',
         methods: ['GET', 'POST'],
       },
+      transports: ['websocket', 'polling'],
     });
 
     io.on('connection', (socket) => {
@@ -116,30 +116,19 @@ const ioHandler = (req: Request, res: NextApiResponseServerIO) => {
         }
       });
     });
+  }
 
-    res.socket.server.io = io;
-  }
-  return NextResponse.json({ success: true });
-};
-
-export async function GET(req: Request) {
-  if (!req.headers.get('upgrade')?.includes('websocket')) {
-    return new Response('Expected websocket', { status: 400 });
-  }
-  try {
-    const res = await fetch(req.url!, {
-      method: req.method,
-      headers: req.headers,
-    });
-    return new Response(null, {
-      status: 101,
-      headers: res.headers,
-    });
-  } catch (e) {
-    return new Response(null, { status: 500 });
-  }
+  // Return a response to acknowledge the WebSocket upgrade
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }
 
 export async function POST(req: Request) {
-  return ioHandler(req, req as any);
+  return GET(req);
 } 

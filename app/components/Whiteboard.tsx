@@ -1,19 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Socket } from 'socket.io-client';
+import type { Pusher } from 'pusher-js';
 import { Button } from "@/components/ui/button";
 import type { ClientToServerEvents, ServerToClientEvents, DrawData } from '@/types/socket';
 
 interface WhiteboardProps {
-  socket: Socket<ServerToClientEvents, ClientToServerEvents>;
+  socket: Pusher;
   studentId: string;
   classCode: string;
   isTeacher?: boolean;
   onBoardClick?: () => void;
 }
 
-export default function Whiteboard({ socket, studentId, classCode, isTeacher, onBoardClick }: WhiteboardProps) {
+export default function Whiteboard({ socket, studentId, classCode, isTeacher = false, onBoardClick }: WhiteboardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
@@ -28,80 +28,80 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set white background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Set up canvas
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    // Request initial canvas state if we're a teacher viewing a student's board
-    if (isTeacher) {
-      socket.emit('request-canvas-state', { classCode, studentId });
-    }
-
-    // Handle receiving draw updates
-    socket.on('draw-update-received', ({ studentId: drawingStudentId, drawData, canvasState }) => {
-      if (drawingStudentId === studentId) {
-        if (canvasState) {
-          loadCanvasState(canvasState);
-        } else if (drawData) {
-          drawOnCanvas(drawData);
-        }
-      }
-    });
-
-    // Handle receiving full canvas state
-    socket.on('canvas-state-update', ({ studentId: updatedStudentId, canvasState }) => {
-      if (updatedStudentId === studentId && canvasState) {
-        loadCanvasState(canvasState);
+    // Subscribe to draw updates
+    const channel = socket.subscribe(`classroom-${classCode}`);
+    channel.bind('draw-update', (data: { studentId: string; drawData: any; canvasState: string }) => {
+      if (data.studentId !== studentId) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0);
+        };
+        img.src = data.canvasState;
       }
     });
 
     return () => {
-      socket.off('draw-update-received');
-      socket.off('canvas-state-update');
+      socket.unsubscribe(`classroom-${classCode}`);
     };
-  }, [socket, studentId, classCode, isTeacher]);
+  }, [socket, classCode, studentId]);
 
-  const loadCanvasState = (canvasState: string) => {
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isTeacher) return;
+    
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
+    if (!canvas) return;
 
-    const img = new Image();
-    img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    };
-    img.src = canvasState;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setIsDrawing(true);
+    setLastPoint({ x, y });
   };
 
-  const drawOnCanvas = (drawData: DrawData) => {
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || isTeacher) return;
+
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx || !drawData?.points?.length) return;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !lastPoint) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     ctx.beginPath();
-    ctx.moveTo(drawData.points[0].x, drawData.points[0].y);
-    
-    if (drawData.type === 'erase') {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = drawData.color;
-    }
-    
-    ctx.lineWidth = drawData.width;
-    ctx.lineCap = 'round';
-
-    for (let i = 1; i < drawData.points.length; i++) {
-      ctx.lineTo(drawData.points[i].x, drawData.points[i].y);
-    }
-    
+    ctx.moveTo(lastPoint.x, lastPoint.y);
+    ctx.lineTo(x, y);
     ctx.stroke();
-    ctx.closePath();
-    
-    // Reset composite operation
-    ctx.globalCompositeOperation = 'source-over';
+
+    // Send draw update
+    fetch('/api/pusher', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'draw-update',
+        classCode,
+        studentId,
+        drawData: { from: lastPoint, to: { x, y } },
+        canvasState: canvas.toDataURL()
+      })
+    });
+
+    setLastPoint({ x, y });
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+    setLastPoint(null);
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -144,11 +144,16 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     const canvasState = canvas.toDataURL();
     
     // Emit both the draw data and canvas state
-    socket.emit('draw-update', { 
-      classCode, 
-      studentId, 
-      drawData,
-      canvasState
+    fetch('/api/pusher', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'draw-update',
+        classCode,
+        studentId,
+        drawData: { from: lastPoint, to: { x, y } },
+        canvasState
+      })
     });
 
     setLastPoint({ x, y });
@@ -162,11 +167,16 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     const canvas = canvasRef.current;
     if (canvas && !isTeacher) {
       const canvasState = canvas.toDataURL();
-      socket.emit('draw-update', { 
-        classCode, 
-        studentId, 
-        drawData: null,
-        canvasState
+      fetch('/api/pusher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'draw-update',
+          classCode,
+          studentId,
+          drawData: null,
+          canvasState
+        })
       });
     }
   };
@@ -181,12 +191,47 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
 
     // Send cleared canvas state
     const canvasState = canvas.toDataURL();
-    socket.emit('draw-update', { 
-      classCode, 
-      studentId, 
-      drawData: null,
-      canvasState
+    fetch('/api/pusher', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'draw-update',
+        classCode,
+        studentId,
+        drawData: null,
+        canvasState
+      })
     });
+  };
+
+  const drawOnCanvas = (drawData: DrawData) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !drawData?.points?.length) return;
+
+    ctx.beginPath();
+    ctx.moveTo(drawData.points[0].x, drawData.points[0].y);
+    
+    if (drawData.type === 'erase') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = drawData.color;
+    }
+    
+    ctx.lineWidth = drawData.width;
+    ctx.lineCap = 'round';
+
+    for (let i = 1; i < drawData.points.length; i++) {
+      ctx.lineTo(drawData.points[i].x, drawData.points[i].y);
+    }
+    
+    ctx.stroke();
+    ctx.closePath();
+    
+    // Reset composite operation
+    ctx.globalCompositeOperation = 'source-over';
   };
 
   return (
@@ -195,11 +240,12 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
         ref={canvasRef}
         width={600}
         height={400}
-        className="touch-none w-full h-full rounded-lg"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        className={`touch-none w-full h-full rounded-lg ${isTeacher ? 'cursor-default' : 'cursor-crosshair'} ${onBoardClick ? 'cursor-pointer' : ''}`}
+        onMouseDown={startDrawing}
+        onMouseMove={draw}
+        onMouseUp={stopDrawing}
+        onMouseOut={stopDrawing}
+        onClick={onBoardClick}
       />
       {!isTeacher && (
         <div className="absolute bottom-4 left-4 flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 rounded-lg shadow-md border border-input">
