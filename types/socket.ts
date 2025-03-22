@@ -1,3 +1,7 @@
+import { Server as NetServer } from 'http';
+import { NextApiResponse } from 'next';
+import { Server as ServerIO } from 'socket.io';
+
 export interface DrawData {
   points: { x: number; y: number }[];
   color: string;
@@ -57,4 +61,12 @@ export interface ClientToServerEvents {
     classCode: string;
     studentId: string;
   }) => void;
+}
+
+export interface NextApiResponseServerIO extends NextApiResponse {
+  socket: any & {
+    server: NetServer & {
+      io: ServerIO<ClientToServerEvents, ServerToClientEvents>;
+    };
+  };
 } 

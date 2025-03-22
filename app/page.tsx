@@ -25,62 +25,74 @@ export default function Home() {
   const [displayName, setDisplayName] = useState('');
 
   useEffect(() => {
-    // Initialize socket connection
-    try {
-      const socketUrl = process.env.NEXT_PUBLIC_VERCEL_URL
-        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-        : 'http://localhost:3001';
+    const initSocket = async () => {
+      try {
+        // Initialize socket connection
+        const socketUrl = window.location.origin;
+        console.log('Connecting to socket at:', socketUrl);
 
-      socket = io(socketUrl, {
-        path: '/socket.io',
-        transports: ['websocket'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
-      });
+        // Create socket instance
+        socket = io(socketUrl, {
+          path: '/api/socket/io',
+          addTrailingSlash: false,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          autoConnect: true,
+        });
 
-      socket.on('connect', () => {
-        console.log('Connected to server');
-        setIsConnected(true);
-        setError(null);
-        if (socket.id) {
-          setStudentId(socket.id);
-          const newName = generateTwoWordName();
-          setDisplayName(newName);
-          console.log('Generated name:', newName);
-        }
-      });
+        // Set up event listeners
+        socket.on('connect', () => {
+          console.log('Connected to server with ID:', socket.id);
+          setIsConnected(true);
+          setError(null);
+          if (socket.id) {
+            setStudentId(socket.id);
+            const newName = generateTwoWordName();
+            setDisplayName(newName);
+            console.log('Generated name:', newName);
+          }
+        });
 
-      socket.on('connect_error', (err) => {
-        console.error('Connection error:', err);
-        setError('Failed to connect to GalleryBoard server. Please try connecting again.');
-        setIsConnected(false);
-      });
+        socket.on('connect_error', (err) => {
+          console.error('Connection error:', err);
+          setError('Failed to connect to GalleryBoard server. Please try connecting again.');
+          setIsConnected(false);
+        });
 
-      socket.on('classroom-created', ({ classCode: newClassCode }: { classCode: string }) => {
-        setClassCode(newClassCode);
-      });
+        socket.on('classroom-created', ({ classCode: newClassCode }) => {
+          console.log('Classroom created:', newClassCode);
+          setClassCode(newClassCode);
+        });
 
-      socket.on('student-joined', ({ studentId, displayName, students: updatedStudents }: { studentId: string, displayName: string, students: Student[] }) => {
-        console.log('Student joined:', { studentId, displayName });
-        setStudents(updatedStudents);
-      });
+        socket.on('student-joined', ({ studentId, displayName, students: updatedStudents }) => {
+          console.log('Student joined:', { studentId, displayName });
+          setStudents(updatedStudents);
+        });
 
-      socket.on('name-assigned', ({ displayName: assignedName }: { displayName: string }) => {
-        console.log('Name assigned:', assignedName);
-        setDisplayName(assignedName);
-      });
+        socket.on('name-assigned', ({ displayName: assignedName }) => {
+          console.log('Name assigned:', assignedName);
+          setDisplayName(assignedName);
+        });
 
-      socket.on('student-left', ({ students: updatedStudents }: { students: Student[] }) => {
-        setStudents(updatedStudents);
-      });
+        socket.on('student-left', ({ students: updatedStudents }) => {
+          setStudents(updatedStudents);
+        });
 
-      return () => {
+        // Initialize connection
+        await fetch('/api/socket/io');
+      } catch (err) {
+        console.error('Socket initialization error:', err);
+        setError('Failed to initialize connection. Please refresh the page.');
+      }
+    };
+
+    initSocket();
+
+    return () => {
+      if (socket) {
         socket.disconnect();
-      };
-    } catch (err) {
-      console.error('Socket initialization error:', err);
-      setError('Failed to initialize connection. Please refresh the page.');
-    }
+      }
+    };
   }, []);
 
   const createClassroom = () => {
