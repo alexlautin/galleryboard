@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { useRouter } from 'next/router'; // Import useRouter for navigation
 
 interface WhiteboardProps {
   socket: Socket;
@@ -14,14 +15,17 @@ interface WhiteboardProps {
   classCode: string;
   isTeacher?: boolean;
   onBoardClick?: () => void;
+  selectedStudentId?: string; // Added prop for teacher-selected student
 }
 
-export default function Whiteboard({ socket, studentId, classCode, isTeacher, onBoardClick }: WhiteboardProps) {
+export default function Whiteboard({ socket, studentId, classCode, isTeacher, onBoardClick, selectedStudentId }: WhiteboardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [tool, setTool] = useState<'draw' | 'erase'>('draw');
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null);
+  const [canvasState, setCanvasState] = useState<string | null>(null); // Manage canvas state
+  const router = useRouter(); // Hook to handle page navigation
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -42,16 +46,17 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Request initial canvas state if we're a teacher viewing a student's board
-    if (isTeacher) {
-      socket.emit('request-canvas-state', { classCode, studentId });
+    // If teacher, load the selected student's canvas state
+    if (isTeacher && selectedStudentId && selectedStudentId !== studentId) {
+      socket.emit('request-canvas-state', { classCode, studentId: selectedStudentId });
     }
 
     // Handle receiving draw updates
     socket.on('draw-update-received', ({ studentId: drawingStudentId, drawData, canvasState }) => {
-      if (drawingStudentId === studentId) {
+      if (drawingStudentId === studentId || (isTeacher && selectedStudentId === drawingStudentId)) {
         if (canvasState) {
-          loadCanvasState(canvasState);
+          setCanvasState(canvasState); // Set the received canvas state
+          loadCanvasState(canvasState); // Load the canvas state into the canvas
         } else if (drawData) {
           drawOnCanvas(drawData);
         }
@@ -61,23 +66,16 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     // Handle receiving full canvas state
     socket.on('canvas-state-update', ({ studentId: updatedStudentId, canvasState }) => {
       if (updatedStudentId === studentId && canvasState) {
-        loadCanvasState(canvasState);
-      }
-    });
-
-    // Handle loading saved canvas state
-    socket.on('load-canvas', ({ studentId: loadStudentId, canvasData }) => {
-      if (loadStudentId === studentId && canvasData) {
-        loadCanvasState(canvasData);
+        setCanvasState(canvasState); // Set the received canvas state
+        loadCanvasState(canvasState); // Load the canvas state into the canvas
       }
     });
 
     return () => {
       socket.off('draw-update-received');
       socket.off('canvas-state-update');
-      socket.off('load-canvas');
     };
-  }, [socket, studentId, classCode, isTeacher]);
+  }, [socket, studentId, classCode, isTeacher, selectedStudentId]);
 
   const loadCanvasState = (canvasState: string) => {
     const canvas = canvasRef.current;
@@ -225,6 +223,11 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     });
   };
 
+  // Navigate back to the homepage
+  const handleBackClick = () => {
+    router.push('/'); // Or use window.location.href = '/' for regular navigation
+  };
+
   return (
     <div className="relative border border-input rounded-lg shadow-md" onClick={onBoardClick}>
       <canvas
@@ -236,6 +239,27 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
+      
+      {/* Back Arrow */}
+      <button 
+        onClick={handleBackClick} 
+        className="absolute top-4 right-4 p-2 rounded-full bg-white shadow-lg"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-6 h-6 text-gray-800"
+        >
+          <path d="M19 12H5" />
+          <path d="M12 5l-7 7 7 7" />
+        </svg>
+      </button>
+
       {!isTeacher && (
         <div className="absolute bottom-4 left-4 flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 rounded-lg shadow-md border border-input">
           <TooltipProvider>
@@ -322,8 +346,9 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
                     strokeLinejoin="round"
                     className="w-4 h-4"
                   >
-                    <path d="M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4L20 11L11 20" />
-                    <path d="M6 11L13 18" />
+                    <path d="M3 20h18" />
+                    <path d="M15 5l5 5" />
+                    <path d="M20 5l-5 5" />
                   </svg>
                   <span className="sr-only">Erase</span>
                 </Button>
@@ -334,16 +359,14 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
             </Tooltip>
           </TooltipProvider>
 
-          <Separator orientation="vertical" className="mx-1" />
-
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   onClick={clearCanvas}
-                  variant="destructive"
-                  size="sm"
-                  className="px-3"
+                  variant="outline"
+                  size="icon"
+                  className="w-8 h-8"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -353,15 +376,11 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="w-4 h-4"
+                    className="w-5 h-5"
                   >
-                    <path d="M3 6h18" />
-                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                    <line x1="10" y1="11" x2="10" y2="17" />
-                    <line x1="14" y1="11" x2="14" y2="17" />
+                    <path d="M4 12h16" />
+                    <path d="M12 4v16" />
                   </svg>
-                  <span className="sr-only">Clear canvas</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -373,4 +392,4 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
       )}
     </div>
   );
-} 
+}
