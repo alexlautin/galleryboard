@@ -108,7 +108,8 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3000; // ✅ Use Heroku’s dynamic port
+
 httpServer.listen(PORT, () => {
   console.log(`Socket.IO server running on port ${PORT}`);
-}); 
+});
