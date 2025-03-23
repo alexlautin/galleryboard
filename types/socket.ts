@@ -44,9 +44,37 @@ export interface ClientToServerEvents {
     studentId: string;
     displayName: string;
   }) => void;
+<<<<<<< HEAD
+  'draw-start': (data: {
+    classCode: string;
+    studentId: string;
+    startX: number;
+    startY: number;
+    color: string;
+    width: number;
+  }) => void;
+  'draw-update': (data: {
+    classCode: string;
+    studentId: string;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    color: string;
+    width: number;
+  }) => void;
+  'draw-end': (data: {
+    classCode: string;
+    studentId: string;
+  }) => void;
+  'clear-canvas': (data: {
+    classCode: string;
+    studentId: string;
+=======
   'leave-classroom': (data: {
     classCode: string;
     studentId: string;
+>>>>>>> main
   }) => void;
 }
 

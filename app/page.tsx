@@ -26,6 +26,10 @@ export default function Home() {
   const [editableDisplayName, setEditableDisplayName] = useState('');
 
   useEffect(() => {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 5424fd71d996aafc1d69b78f447cf5253084e3c5
     const initSocket = async () => {
       try {
         const socketUrl = 'http://localhost:3001';
@@ -33,6 +37,176 @@ export default function Home() {
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           autoConnect: true,
+<<<<<<< HEAD
+=======
+        });
+
+        socket.on('connect', () => {
+          setIsConnected(true);
+          setError(null);
+          if (socket.id) {
+            setStudentId(socket.id);
+            const newName = generateTwoWordName();
+            setDisplayName(newName);
+            setEditableDisplayName(newName);
+          }
+        });
+
+        socket.on('connect_error', () => {
+          setError('Failed to connect to GalleryBoard server. Please try again.');
+          setIsConnected(false);
+        });
+
+        socket.on('classroom-created', ({ classCode: newClassCode }) => {
+          setClassCode(newClassCode);
+          window.history.pushState(null, '', `?classCode=${newClassCode}&mode=${isTeacher ? 'teacher' : 'student'}`);
+        });
+
+        socket.on('student-joined', ({ students: updatedStudents }) => {
+          setStudents(updatedStudents);
+        });
+
+        socket.on('student-left', ({ students: updatedStudents }) => {
+          setStudents(updatedStudents);
+        });
+
+        await fetch('/api/socket/io');
+      } catch {
+        setError('Failed to initialize connection. Please refresh the page.');
+      }
+    };
+
+    initSocket();
+=======
+    // Generate a unique ID for this client
+    const uniqueId = Math.random().toString(36).substring(2, 15);
+    setStudentId(uniqueId);
+    const newName = generateTwoWordName();
+    setDisplayName(newName);
+
+    // Set up Pusher connection handlers
+    pusherClient.connection.bind('connected', () => {
+      console.log('Pusher connected successfully');
+      setIsConnected(true);
+      setError(null);
+    });
+
+    pusherClient.connection.bind('error', (err: any) => {
+      console.error('Pusher connection error:', err);
+      setIsConnected(false);
+      setError(`Connection error: ${err.message || 'Unknown error'}`);
+      
+      // Attempt to reconnect after a delay
+      setTimeout(() => {
+        console.log('Attempting to reconnect...');
+        pusherClient.connect();
+      }, 3000);
+    });
+
+    pusherClient.connection.bind('disconnected', () => {
+      console.log('Pusher disconnected');
+      setIsConnected(false);
+      setError('Disconnected from server. Attempting to reconnect...');
+      
+      // Attempt to reconnect after a delay
+      setTimeout(() => {
+        console.log('Attempting to reconnect...');
+        pusherClient.connect();
+      }, 3000);
+    });
+
+    pusherClient.connection.bind('connecting', () => {
+      console.log('Connecting to Pusher...');
+      setIsConnected(false);
+      setError('Connecting to server...');
+    });
+
+    // Connect to Pusher
+    if (pusherClient.connection.state !== 'connected') {
+      console.log('Initializing Pusher connection...');
+      pusherClient.connect();
+    }
+>>>>>>> main
+
+    return () => {
+      if (classCode) {
+        // Clean up when component unmounts
+        fetch('/api/pusher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'leave-classroom',
+            classCode,
+            studentId: uniqueId
+          })
+        }).catch(console.error);
+      }
+
+      // Cleanup Pusher connection
+      pusherClient.disconnect();
+      pusherClient.connection.unbind_all();
+    };
+  }, [isTeacher]);
+
+  useEffect(() => {
+    if (!classCode) return;
+
+    console.log('Setting up classroom event listeners for:', classCode, 'isTeacher:', isTeacher);
+    
+    // Subscribe to classroom events
+    const channel = pusherClient.subscribe(`classroom-${classCode}`);
+    console.log('Subscribed to channel:', `classroom-${classCode}`);
+
+    channel.bind('classroom-created', (data: { classCode: string; teacherId: string }) => {
+      console.log('Classroom created event received:', data);
+      setClassCode(data.classCode);
+    });
+
+    channel.bind('student-joined', (data: { studentId: string; displayName: string; students: Student[] }) => {
+      console.log('Student joined event received:', {
+        event: 'student-joined',
+        data,
+        currentStudents: students,
+        isTeacher
+      });
+      
+      // Update students list
+      setStudents(data.students);
+      
+      // Log the current state after update
+      console.log('Updated students state:', {
+        totalStudents: data.students.length,
+        studentIds: data.students.map(s => s.id),
+        isTeacher,
+        currentStudents: students
+      });
+    });
+
+    channel.bind('student-left', (data: { students: Student[] }) => {
+      console.log('Student left event received:', {
+        event: 'student-left',
+        data,
+        currentStudents: students,
+        isTeacher
+      });
+      setStudents(data.students);
+    });
+
+    channel.bind('teacher-update', (data: { studentId: string; displayName: string; students: Student[] }) => {
+      console.log('Teacher update received:', {
+        event: 'teacher-update',
+        data,
+        currentStudents: students,
+        isTeacher
+      });
+      
+      if (isTeacher) {
+        setStudents(data.students);
+        console.log('Updated teacher dashboard with students:', {
+          totalStudents: data.students.length,
+          studentIds: data.students.map(s => s.id),
+          currentStudents: students
+>>>>>>> 5424fd71d996aafc1d69b78f447cf5253084e3c5
         });
 
         socket.on('connect', () => {
