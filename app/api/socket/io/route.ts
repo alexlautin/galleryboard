@@ -3,6 +3,11 @@ import { NextApiRequest } from 'next'
 import { Server as ServerIO } from 'socket.io'
 import { NextResponse } from 'next/server'
 
+declare global {
+  // eslint-disable-next-line no-var
+  var io: ServerIO | undefined;
+}
+
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -59,7 +64,7 @@ if (!global.io) {
       socket.join(classCode);
 
       // Notify all clients in the classroom about the new student
-      global.io.to(classCode).emit('student-joined', {
+      global.io!.to(classCode).emit('student-joined', {
         studentId,
         displayName,
         students: Array.from(classroom.students.entries()).map(([id, data]) => ({
@@ -95,7 +100,7 @@ if (!global.io) {
         classroom.canvasStates.set(studentId, canvasState);
         
         // Broadcast the drawing update to all clients in the classroom
-        global.io.to(classCode).emit('draw-update-received', {
+        global.io!.to(classCode).emit('draw-update-received', {
           studentId,
           drawData,
           canvasState
@@ -125,7 +130,7 @@ if (!global.io) {
         if (classroom.students.has(socket.id)) {
           classroom.students.delete(socket.id);
           classroom.canvasStates.delete(socket.id);
-          global.io.to(code).emit('student-left', { 
+          global.io!.to(code).emit('student-left', { 
             students: Array.from(classroom.students.entries()).map(([id, data]) => ({
               id,
               displayName: data.displayName
@@ -159,4 +164,4 @@ export async function GET(req: Request) {
   } catch (e) {
     return new Response(null, { status: 500 });
   }
-} 
+}
