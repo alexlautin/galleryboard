@@ -122,7 +122,6 @@ bg-[size:20px_20px]">
 
   if (!classCode) {
     return (
-<<<<<<< HEAD
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white">
         <Card className="w-full max-w-md border-none">
           <img src="/galleryboardlogo.jpeg" alt="Logo" className="h-[225px] w-auto" />
@@ -155,38 +154,6 @@ bg-[size:20px_20px]">
               </Button>
             </div>
           </CardContent>
-=======
-      <div className="flex flex-col items-center justify-center border-none min-h-screen p-4 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
-bg-[size:20px_20px]">
-        <Card className="w-full max-w-lg border-none">
-            <img src="/galleryboardlogo.png" alt="Logo" className="h-full w-auto" />
-            <CardContent className="space-y-4 bg-[#fdfdfd] border-2 border-[#e6e4e0] rounded-lg">
-                <div className="flex flex-col space-y-2">
-                    <Input
-                        type="text"
-                        value={inputCode}
-                        onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                        placeholder="Enter class code"
-                        className="text-center"
-                    />
-                    <Button 
-                        onClick={joinClassroom}
-                        size="lg"
-                        className="w-full bg-blue-500 text-white hover:bg-blue-600"
-                    >
-                        Join Classroom
-                    </Button>
-                </div>
-                <Button 
-                    onClick={createClassroom}
-                    variant="outline"
-                    className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
-                    size="lg"
-                >
-                    Create Classroom (Teacher)
-                </Button>
-            </CardContent>
->>>>>>> c501db7add536c3bdf5c57749b104ab31308905f
         </Card>
     </div>
     );

@@ -24,11 +24,8 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
   const [color, setColor] = useState('#000000');
   const [tool, setTool] = useState<'draw' | 'erase'>('draw');
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null);
-<<<<<<< HEAD
-=======
   const [canvasState, setCanvasState] = useState<string | null>(null); // Manage canvas state
   const router = useRouter(); // Hook to handle page navigation
->>>>>>> c501db7add536c3bdf5c57749b104ab31308905f
 
   useEffect(() => {
     const canvas = canvasRef.current;
