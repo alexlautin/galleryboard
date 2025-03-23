@@ -27,6 +27,7 @@ export default function Home() {
 
   useEffect(() => {
     const initSocket = async () => {
+      console.log("⚡ initializing socket...");
       try {
         const socketUrl = 'https://galleryboard.onrender.com/';
         socket = io(socketUrl, {
@@ -36,8 +37,11 @@ export default function Home() {
           reconnectionDelay: 1000,
           autoConnect: true,
         });
+        console.log("✅ socket.io initialized");
 
+        let connectedOnce = false;
         socket.on('connect', () => {
+          console.log('Connected to server. Socket ID:', socket.id);
           setIsConnected(true);
           setError(null);
           if (socket.id) {
@@ -48,15 +52,13 @@ export default function Home() {
           }
         });
 
-        console.log('Connected to server. Socket ID:', socket.id);
-
         socket.on('connect_error', (err) => {
+          console.error("🔴 Socket connection error:", err);
+          if (!connectedOnce) {
           console.error('Socket connection error:', err);
-        });
-
-        socket.on('connect_error', () => {
           setError('Failed to connect to GalleryBoard server. Please try again.');
           setIsConnected(false);
+          }
         });
 
         socket.on('classroom-created', ({ classCode: newClassCode }) => {
@@ -73,7 +75,8 @@ export default function Home() {
         });
 
         // await fetch('/api/socket/io');
-      } catch {
+      } catch (error) {
+        console.error('Failed to initialize connection:', error);
         setError('Failed to initialize connection. Please refresh the page.');
       }
     };
