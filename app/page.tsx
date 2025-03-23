@@ -30,6 +30,8 @@ export default function Home() {
       try {
         const socketUrl = 'https://galleryboard.onrender.com/';
         socket = io(socketUrl, {
+          transports: ['websocket'],      // Force WebSocket (no long-polling fallback)
+          withCredentials: true,          // Allow cookies if needed (aligns with CORS)
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           autoConnect: true,
@@ -44,6 +46,12 @@ export default function Home() {
             setDisplayName(newName);
             setEditableDisplayName(newName);
           }
+        });
+
+        console.log('Connected to server. Socket ID:', socket.id);
+
+        socket.on('connect_error', (err) => {
+          console.error('Socket connection error:', err);
         });
 
         socket.on('connect_error', () => {
@@ -64,7 +72,7 @@ export default function Home() {
           setStudents(updatedStudents);
         });
 
-        await fetch('/api/socket/io');
+        // await fetch('/api/socket/io');
       } catch {
         setError('Failed to initialize connection. Please refresh the page.');
       }

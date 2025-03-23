@@ -5,45 +5,54 @@ const path = require('path');
 
 const app = express();
 const httpServer = createServer(app);
+
+// Set up Socket.IO with CORS for Vercel and localhost dev
 const io = new Server(httpServer, {
   cors: {
-    origin: "https://galleryboard.vercel.app",
-    // origin: "http://localhost:3000",
+    origin: [
+      "https://galleryboard.vercel.app",
+      "http://localhost:3000",
+    ],
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
+
+// Simple test route
 app.get('/', (req, res) => {
   res.send('Socket.IO server is running');
 });
-// Store classroom data and used names
-const classrooms = new Map();
-const usedNames = new Map(); // Track used names per classroom
 
+// --- Classroom Management ---
+const classrooms = new Map();         // Store classroom data
+const usedNames = new Map();          // Track used names per classroom
+
+// --- Socket.IO Events ---
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
+  // Teacher creates a classroom
   socket.on('create-classroom', (teacherId) => {
     const classCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     classrooms.set(classCode, {
       teacherId,
       students: new Map(),
     });
-    usedNames.set(classCode, new Set()); // Initialize set of used names for this classroom
+    usedNames.set(classCode, new Set());
     socket.join(classCode);
     socket.emit('classroom-created', { classCode, teacherId });
   });
 
+  // Student joins a classroom
   socket.on('join-classroom', (data) => {
     const { classCode, studentId, displayName } = data;
     const classroom = classrooms.get(classCode);
 
     if (classroom) {
-      // Check if this name is already used in this classroom
       const classroomUsedNames = usedNames.get(classCode);
       let finalDisplayName = displayName;
 
       if (classroomUsedNames.has(displayName)) {
-        // If name is taken, append a number
         let counter = 1;
         while (classroomUsedNames.has(`${displayName}${counter}`)) {
           counter++;
@@ -51,7 +60,6 @@ io.on('connection', (socket) => {
         finalDisplayName = `${displayName}${counter}`;
       }
 
-      // Add the name to used names
       classroomUsedNames.add(finalDisplayName);
 
       socket.join(classCode);
@@ -61,18 +69,17 @@ io.on('connection', (socket) => {
         canvasData: null,
       });
 
-      // Emit the event with the potentially modified display name
       io.to(classCode).emit('student-joined', {
         studentId,
         displayName: finalDisplayName,
         students: Array.from(classroom.students.values()),
       });
 
-      // Also emit back to the joining student their final display name
       socket.emit('name-assigned', { displayName: finalDisplayName });
     }
   });
 
+  // Student draws on the canvas
   socket.on('draw-update', (data) => {
     const { classCode, studentId, drawData, canvasState } = data;
     const classroom = classrooms.get(classCode);
@@ -91,6 +98,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle disconnection
   socket.on('disconnecting', () => {
     for (const room of socket.rooms) {
       if (room !== socket.id) {
@@ -98,13 +106,14 @@ io.on('connection', (socket) => {
         if (classroom) {
           const student = classroom.students.get(socket.id);
           if (student) {
-            // Remove the student's display name from used names
             const classroomUsedNames = usedNames.get(room);
             if (classroomUsedNames) {
               classroomUsedNames.delete(student.displayName);
             }
           }
+
           classroom.students.delete(socket.id);
+
           io.to(room).emit('student-left', {
             students: Array.from(classroom.students.values()),
           });
@@ -114,7 +123,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Use Heroku's dynamic port or default to 3000
+// Use Render's dynamic port or default to 3001
 const PORT = process.env.PORT || 3001;
 
 httpServer.listen(PORT, () => {
