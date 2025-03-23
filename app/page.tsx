@@ -122,20 +122,11 @@ bg-[size:20px_20px]">
 
   if (!classCode) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 flex items-center justify-center min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
         <Card className="w-full max-w-md border-none">
-          <img src="/galleryboardlogo.jpeg" alt="Logo" className="h-[225px] w-auto" />
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center text-black">GalleryBoard</CardTitle>
-          </CardHeader>
+          <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto" />
           <CardContent className="space-y-4">
-            <Button
-              onClick={createClassroom}
-              className="w-full bg-blue-500 text-white hover:bg-blue-600"
-              size="lg"
-            >
-              Create Classroom (Teacher)
-            </Button>
             <div className="flex flex-col space-y-2">
               <Input
                 type="text"
@@ -146,13 +137,20 @@ bg-[size:20px_20px]">
               />
               <Button
                 onClick={joinClassroom}
-                variant="outline"
                 size="lg"
-                className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
+                className="w-full bg-blue-500 text-white hover:bg-blue-600"
               >
                 Join Classroom
               </Button>
             </div>
+            <Button
+              onClick={createClassroom}
+              variant="outline"
+              className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
+              size="lg"
+            >
+              Create Classroom (Teacher)
+            </Button>
           </CardContent>
         </Card>
     </div>
