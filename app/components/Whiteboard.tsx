@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { useRouter } from 'next/router'; // Import useRouter for navigation
+import { useRouter } from 'next/navigation'; // Import useRouter for navigation
 
 interface WhiteboardProps {
   socket: Socket;

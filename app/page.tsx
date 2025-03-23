@@ -121,8 +121,9 @@ export default function Home() {
 
   if (!isConnected) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-white">
-        <Card className="w-full max-w-md">
+      <div className="flex items-center justify-center min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
+        <Card className="w-full max-w-md bg-[#fdfdfd] border-2 border-[#e6e4e0] rounded-lg">
           <CardContent className="p-6 space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
             <p className="text-center text-gray-700">
@@ -145,46 +146,45 @@ export default function Home() {
 
   if (!classCode) {
     return (
-      <div className="flex flex-col items-center justify-center border-none min-h-screen p-4 bg-white">
-        <Card className="w-full max-w-md border-none">
-        <img src="/galleryboardlogo.jpeg" alt="Logo" className="h-[225px] w-auto" />
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center text-black">GalleryBoard</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button 
-              onClick={createClassroom}
-              className="w-full bg-blue-500 text-white hover:bg-blue-600"
-              size="lg"
-            >
-              Create Classroom (Teacher)
-            </Button>
-            <div className="flex flex-col space-y-2">
-              <Input
-                type="text"
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                placeholder="Enter class code"
-                className="text-center"
-              />
-              <Button 
-                onClick={joinClassroom}
-                variant="outline"
-                size="lg"
-                className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
-              >
-                Join Classroom
-              </Button>
-            </div>
-          </CardContent>
+      <div className="flex flex-col items-center justify-center border-none min-h-screen p-4 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
+        <Card className="w-full max-w-lg border-none">
+            <img src="/galleryboardlogo.png" alt="Logo" className="h-full w-auto" />
+            <CardContent className="space-y-4 bg-[#fdfdfd] border-2 border-[#e6e4e0] rounded-lg">
+                <div className="flex flex-col space-y-2">
+                    <Input
+                        type="text"
+                        value={inputCode}
+                        onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                        placeholder="Enter class code"
+                        className="text-center"
+                    />
+                    <Button 
+                        onClick={joinClassroom}
+                        size="lg"
+                        className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                    >
+                        Join Classroom
+                    </Button>
+                </div>
+                <Button 
+                    onClick={createClassroom}
+                    variant="outline"
+                    className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
+                    size="lg"
+                >
+                    Create Classroom (Teacher)
+                </Button>
+            </CardContent>
         </Card>
-      </div>
+    </div>
     );
   }
 
   if (isTeacher) {
     return (
-      <div className="p-8 bg-white">
+      <div className="p-8 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
@@ -238,7 +238,8 @@ export default function Home() {
   }
 
   return (
-    <div className="p-8 bg-white">
+    <div className="p-8 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
       <Card className="mb-6">
         <CardContent className="p-6">
           <h2 className="text-2xl font-bold text-gray-700">Class Code: {classCode}</h2>
