@@ -11,5 +11,19 @@ const nextConfig = {
     return config;
   },
 };
-
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/api/socket/io',
+        headers: [
+          {
+            key: 'Connection',
+            value: 'Upgrade',
+          },
+        ],
+      },
+    ];
+  },
+};
 module.exports = nextConfig; 
