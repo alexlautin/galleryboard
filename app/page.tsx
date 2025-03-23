@@ -77,10 +77,13 @@ export default function Home() {
         socket.disconnect();
       }
     };
-  }, [isTeacher]);
+  }, []);
 
   const createClassroom = () => {
-    if (!socket.id) return;
+    if (!socket || !socket.connected) {
+      setError('Socket not connected yet. Please wait a moment.');
+      return;
+    }
     setIsTeacher(true);
     socket.emit('create-classroom', socket.id);
   };
