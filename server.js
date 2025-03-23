@@ -1,12 +1,13 @@
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:3000", // Update this to your frontend's URL in production
+    origin: "https://your-frontend-domain.com", // Replace with your frontend's URL
     methods: ["GET", "POST"],
   },
 });
@@ -15,9 +16,12 @@ const io = new Server(httpServer, {
 const classrooms = new Map();
 const usedNames = new Map(); // Track used names per classroom
 
-// Serve a basic HTTP response for the root route
-app.get('/', (req, res) => {
-  res.send('Socket.IO server is running');
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, 'build')));
+
+// Serve the frontend for all other routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
 io.on('connection', (socket) => {
