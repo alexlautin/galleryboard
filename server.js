@@ -7,7 +7,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "https://galleryboard-c40d6d5bdb50.herokuapp.com/", // Replace with your frontend's URL
+    origin: "https://galleryboard.vercel.app",
     methods: ["GET", "POST"],
   },
 });
@@ -15,14 +15,6 @@ const io = new Server(httpServer, {
 // Store classroom data and used names
 const classrooms = new Map();
 const usedNames = new Map(); // Track used names per classroom
-
-// Serve static files from the React app
-app.use(express.static(path.join(__dirname, 'build')));
-
-// Serve the frontend for all other routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
-});
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);

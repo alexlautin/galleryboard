@@ -28,7 +28,7 @@ export default function Home() {
   useEffect(() => {
     const initSocket = async () => {
       try {
-        const socketUrl = 'http://localhost:3001';
+        const socketUrl = 'https://galleryboard.onrender.com/';
         socket = io(socketUrl, {
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
