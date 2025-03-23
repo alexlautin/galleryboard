@@ -690,6 +690,9 @@ video {
 .h-full {
   height: 100%;
 }
+.h-\[225px\] {
+  height: 225px;
+}
 .min-h-screen {
   min-height: 100vh;
 }
@@ -782,6 +785,11 @@ video {
   --tw-space-y-reverse: 0;
   margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(1rem * var(--tw-space-y-reverse));
+}
+.space-y-1 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
 }
 .overflow-hidden {
   overflow: hidden;

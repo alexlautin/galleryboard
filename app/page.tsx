@@ -23,11 +23,12 @@ export default function Home() {
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
+  const [editableDisplayName, setEditableDisplayName] = useState('');  // State for editing name
+  const [isNameSet, setIsNameSet] = useState(false);  // To track if the name has been set
 
   useEffect(() => {
     const initSocket = async () => {
       try {
-        // Initialize socket connection
         const socketUrl = 'http://localhost:3001';
         socket = io(socketUrl, {
           reconnectionAttempts: 5,
@@ -35,14 +36,15 @@ export default function Home() {
           autoConnect: true,
         });
 
-        // Set up event listeners
         socket.on('connect', () => {
           setIsConnected(true);
           setError(null);
           if (socket.id) {
             setStudentId(socket.id);
+            // Set a default name
             const newName = generateTwoWordName();
             setDisplayName(newName);
+            setEditableDisplayName(newName);  // Set default name for editing
           }
         });
 
@@ -53,7 +55,6 @@ export default function Home() {
 
         socket.on('classroom-created', ({ classCode: newClassCode }) => {
           setClassCode(newClassCode);
-          // Update the URL with the classCode
           window.history.pushState(null, '', `?classCode=${newClassCode}&mode=${isTeacher ? 'teacher' : 'student'}`);
         });
 
@@ -65,7 +66,6 @@ export default function Home() {
           setStudents(updatedStudents);
         });
 
-        // Initialize connection
         await fetch('/api/socket/io');
       } catch (err) {
         setError('Failed to initialize connection. Please refresh the page.');
@@ -88,19 +88,26 @@ export default function Home() {
   };
 
   const joinClassroom = () => {
-    if (!socket.id || !inputCode) return;
+    if (!socket.id || !inputCode || !displayName) return;
     socket.emit('join-classroom', {
       classCode: inputCode,
       studentId: socket.id,
       displayName: displayName,
     });
     setClassCode(inputCode);
-    // Update the URL with the classCode
     window.history.pushState(null, '', `?classCode=${inputCode}&mode=student`);
   };
 
+  const updateDisplayName = () => {
+    if (!editableDisplayName.trim()) {
+      setError('Name cannot be empty.');
+      return;
+    }
+    setDisplayName(editableDisplayName);  // Update the display name
+    setIsNameSet(true);  // Mark that the name is set
+  };
+
   useEffect(() => {
-    // Check if there's a classCode and mode in the URL on initial load
     const params = new URLSearchParams(window.location.search);
     const classCodeFromUrl = params.get('classCode');
     const modeFromUrl = params.get('mode');
@@ -126,18 +133,41 @@ bg-[size:20px_20px]">
         <Card className="w-full max-w-md bg-[#fdfdfd] border-2 border-[#e6e4e0] rounded-lg">
           <CardContent className="p-6 space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="text-center text-gray-700">
-              {error || 'Connecting to GalleryBoard server...'}
-            </p>
+            <p className="text-center text-gray-700">{error || 'Connecting to GalleryBoard server...'}</p>
             {error && (
-              <Button
-                onClick={() => window.location.reload()}
-                variant="outline"
-                className="w-full"
-              >
+              <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
                 Retry Connection
               </Button>
             )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!classCode && !isNameSet) {
+    return (
+      <div className="flex flex-col items-center justify-center border-none min-h-screen p-4 bg-white">
+        <Card className="w-full max-w-md border-none">
+          <img src="/galleryboardlogo.jpeg" alt="Logo" className="h-[225px] w-auto" />
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl font-bold text-center text-black">GalleryBoard</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              type="text"
+              value={editableDisplayName}
+              onChange={(e) => setEditableDisplayName(e.target.value)}
+              placeholder="Choose a display name"
+              className="text-center"
+            />
+            <Button
+              onClick={updateDisplayName}
+              className="w-full bg-blue-500 text-white hover:bg-blue-600"
+              size="lg"
+            >
+              Set Display Name
+            </Button>
           </CardContent>
         </Card>
       </div>
