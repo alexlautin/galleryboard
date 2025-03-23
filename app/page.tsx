@@ -145,7 +145,7 @@ bg-[size:20px_20px]">
                 type="text"
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                placeholder="Enter class code"
+                placeholder="Enter room code"
                 className="text-center"
               />
               <Button
@@ -153,7 +153,7 @@ bg-[size:20px_20px]">
                 size="lg"
                 className="w-full bg-blue-500 text-white hover:bg-blue-600"
               >
-                Join Classroom
+                Join Room
               </Button>
             </div>
             <Button
@@ -162,7 +162,7 @@ bg-[size:20px_20px]">
               className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
               size="lg"
             >
-              Create Classroom (Teacher)
+              Create Room
             </Button>
           </CardContent>
         </Card>
@@ -179,7 +179,7 @@ bg-[size:20px_20px]">
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold text-black">Room Code: {classCode}</h2>
-                <p className="text-gray-500">Connected Students: {students.length}</p>
+                <p className="text-gray-500">Connected Guests: {students.length}</p>
               </div>
             </div>
           </CardContent>
