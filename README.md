@@ -36,4 +36,3 @@ react
 shadcn
 socket.io
 tailwind
-Try it out
