@@ -44,22 +44,11 @@ export interface ClientToServerEvents {
     studentId: string;
     displayName: string;
   }) => void;
-<<<<<<< HEAD
   'draw-start': (data: {
     classCode: string;
     studentId: string;
     startX: number;
     startY: number;
-    color: string;
-    width: number;
-  }) => void;
-  'draw-update': (data: {
-    classCode: string;
-    studentId: string;
-    startX: number;
-    startY: number;
-    endX: number;
-    endY: number;
     color: string;
     width: number;
   }) => void;
@@ -70,11 +59,19 @@ export interface ClientToServerEvents {
   'clear-canvas': (data: {
     classCode: string;
     studentId: string;
-=======
+  }) => void;
   'leave-classroom': (data: {
     classCode: string;
     studentId: string;
->>>>>>> main
+  }) => void;
+  'create-classroom': (teacherId: string) => void;
+  'remove-student': (data: {
+    studentId: string;
+    classCode: string;
+  }) => void;
+  'request-canvas-state': (data: {
+    studentId: string;
+    classCode: string;
   }) => void;
 }
 

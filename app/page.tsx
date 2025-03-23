@@ -101,6 +101,12 @@ export default function Home() {
     socket.emit('remove-student', { studentId: id, classCode });
   };
 
+  useEffect(() => {
+    if (isTeacher && selectedStudent) {
+      socket.emit('request-canvas-state', { studentId: selectedStudent, classCode });
+    }
+  }, [isTeacher, selectedStudent, classCode]);
+
   if (!isConnected) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
@@ -159,7 +165,7 @@ bg-[size:20px_20px]">
 
   if (isTeacher) {
     return (
-      <div className="p-8 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+      <div className="p-8 h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
 bg-[size:20px_20px]">
         <Card className="mb-6">
           <CardContent className="p-6">
@@ -182,22 +188,40 @@ bg-[size:20px_20px]">
         </Card>
 
         {selectedStudent ? (
-          <Card>
-            <CardContent className="p-6">
+          // Full-screen overlay
+          <div className="fixed inset-0 z-50 flex flex-col bg-white">
+            <div className="flex justify-between items-center p-4 shadow">
+              <h2 className="text-2xl font-bold">Viewing {selectedStudent}&apos;s Board</h2>
+              <button
+                onClick={() => setSelectedStudent(null)}
+                className="border border-gray-400 rounded px-3 py-1"
+              >
+                Close Full Screen
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
               <Whiteboard
                 socket={socket}
                 studentId={selectedStudent}
                 classCode={classCode}
                 isTeacher={true}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ) : (
+          // Grid of student boards
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {students.map((student) => (
-              <Card key={student.id} className="relative cursor-pointer hover:shadow-lg transition-shadow">
+              <Card
+                key={student.id}
+                className="relative cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => setSelectedStudent(student.id)}
+              >
                 <button
-                  onClick={() => removeStudent(student.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeStudent(student.id);
+                  }}
                   className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
                 >
                   X
