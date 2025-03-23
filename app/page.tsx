@@ -53,7 +53,7 @@ export default function Home() {
 
         socket.on('classroom-created', ({ classCode: newClassCode }) => {
           setClassCode(newClassCode);
-          window.history.pushState(null, '', `?classCode=${newClassCode}&mode=${isTeacher ? 'teacher' : 'student'}`);
+          window.history.pushState(null, '', `?classCode=${newClassCode}&mode=teacher`);
         });
 
         socket.on('student-joined', ({ students: updatedStudents }) => {
@@ -85,7 +85,11 @@ export default function Home() {
       return;
     }
     setIsTeacher(true);
-    socket.emit('create-classroom', socket.id);
+    if (socket.id) {
+      socket.emit('create-classroom', socket.id);
+    } else {
+      setError('Socket ID is undefined. Please try again.');
+    }
   };
 
   const joinClassroom = () => {
@@ -131,7 +135,7 @@ bg-[size:20px_20px]">
 
   if (!classCode) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 flex items-center justify-center min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+      <div className="flex flex-col items-center justify-center p-4 min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
 bg-[size:20px_20px]">
         <Card className="w-full max-w-md border-none">
           <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto" />
@@ -174,18 +178,9 @@ bg-[size:20px_20px]">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-bold text-black">Class Code: {classCode}</h2>
+                <h2 className="text-2xl font-bold text-black">Room Code: {classCode}</h2>
                 <p className="text-gray-500">Connected Students: {students.length}</p>
               </div>
-              {selectedStudent && (
-                <Button
-                  onClick={() => setSelectedStudent(null)}
-                  variant="outline"
-                  className="text-blue-600 border-blue-600 hover:bg-blue-50"
-                >
-                  Back to Grid
-                </Button>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -251,7 +246,7 @@ bg-[size:20px_20px]">
 bg-[size:20px_20px]">
       <Card className="mb-6">
         <CardContent className="p-6">
-          <h2 className="text-2xl font-bold text-gray-700">Class Code: {classCode}</h2>
+          <h2 className="text-2xl font-bold text-gray-700">Room Code: {classCode}</h2>
           <p className="text-gray-500">Your Name: {displayName}</p>
         </CardContent>
       </Card>

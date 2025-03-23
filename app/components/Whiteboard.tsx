@@ -245,26 +245,6 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
-      
-      {/* Back Arrow */}
-      <button 
-        onClick={handleBackClick} 
-        className="absolute top-4 right-4 p-2 rounded-full bg-white shadow-lg"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-6 h-6 text-gray-800"
-        >
-          <path d="M19 12H5" />
-          <path d="M12 5l-7 7 7 7" />
-        </svg>
-      </button>
 
       {!isTeacher && (
         <div className="absolute bottom-4 left-4 flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 rounded-lg shadow-md border border-input">
