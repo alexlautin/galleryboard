@@ -134,59 +134,6 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
-<<<<<<< HEAD
-=======
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isTeacher) return;
-    
-    const coords = getCanvasCoordinates(e);
-    if (!coords) return;
-
-    setIsDrawing(true);
-    setLastPoint(coords);
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || isTeacher) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx || !drawData?.points?.length) return;
-
-    ctx.beginPath();
-    ctx.moveTo(drawData.points[0].x, drawData.points[0].y);
-    
-    if (drawData.type === 'erase') {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = drawData.color;
-    }
-    
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-
-    for (let i = 1; i < drawData.points.length; i++) {
-      ctx.lineTo(drawData.points[i].x, drawData.points[i].y);
-    }
-    
-    ctx.stroke();
-    ctx.closePath();
-    
-    // Reset composite operation
-    ctx.globalCompositeOperation = 'source-over';
-  };
-
-  const getCanvasCoordinates = (e: React.PointerEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
->>>>>>> 5424fd71d996aafc1d69b78f447cf5253084e3c5
     return {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY
@@ -199,8 +146,6 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
       return;
     }
     
-    const coords = getCanvasCoordinates(e);
-    if (!coords) return;
     const coords = getCanvasCoordinates(e);
     if (!coords) return;
 
@@ -246,7 +191,6 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
       });
     }
 
-    setLastPoint(coords);
     setLastPoint(coords);
   };
 
@@ -454,8 +398,4 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
       )}
     </div>
   );
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 5424fd71d996aafc1d69b78f447cf5253084e3c5
