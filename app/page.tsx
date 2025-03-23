@@ -19,8 +19,56 @@ export default function Home() {
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
+  const [editableDisplayName, setEditableDisplayName] = useState('');
 
   useEffect(() => {
+<<<<<<< HEAD
+    const initSocket = async () => {
+      try {
+        const socketUrl = 'http://localhost:3001';
+        socket = io(socketUrl, {
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          autoConnect: true,
+        });
+
+        socket.on('connect', () => {
+          setIsConnected(true);
+          setError(null);
+          if (socket.id) {
+            setStudentId(socket.id);
+            const newName = generateTwoWordName();
+            setDisplayName(newName);
+            setEditableDisplayName(newName);
+          }
+        });
+
+        socket.on('connect_error', () => {
+          setError('Failed to connect to GalleryBoard server. Please try again.');
+          setIsConnected(false);
+        });
+
+        socket.on('classroom-created', ({ classCode: newClassCode }) => {
+          setClassCode(newClassCode);
+          window.history.pushState(null, '', `?classCode=${newClassCode}&mode=${isTeacher ? 'teacher' : 'student'}`);
+        });
+
+        socket.on('student-joined', ({ students: updatedStudents }) => {
+          setStudents(updatedStudents);
+        });
+
+        socket.on('student-left', ({ students: updatedStudents }) => {
+          setStudents(updatedStudents);
+        });
+
+        await fetch('/api/socket/io');
+      } catch {
+        setError('Failed to initialize connection. Please refresh the page.');
+      }
+    };
+
+    initSocket();
+=======
     // Generate a unique ID for this client
     const uniqueId = Math.random().toString(36).substring(2, 15);
     setStudentId(uniqueId);
@@ -69,6 +117,7 @@ export default function Home() {
       console.log('Initializing Pusher connection...');
       pusherClient.connect();
     }
+>>>>>>> main
 
     return () => {
       if (classCode) {
@@ -88,7 +137,7 @@ export default function Home() {
       pusherClient.disconnect();
       pusherClient.connection.unbind_all();
     };
-  }, []);
+  }, [isTeacher]);
 
   useEffect(() => {
     if (!classCode) return;
@@ -218,57 +267,20 @@ export default function Home() {
     }
   };
 
-  const joinClassroom = async () => {
-    if (!inputCode) return;
-    
-    try {
-      console.log('Joining classroom:', inputCode, 'as student:', studentId, 'with name:', displayName);
-      const response = await fetch('/api/pusher', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'join-classroom',
-          classCode: inputCode.toUpperCase(),
-          studentId,
-          displayName
-        })
-      });
+  const joinClassroom = () => {
+    if (!socket.id || !inputCode) return;
+    socket.emit('join-classroom', {
+      classCode: inputCode,
+      studentId: socket.id,
+      displayName: displayName,
+    });
+    setClassCode(inputCode);
+    window.history.pushState(null, '', `?classCode=${inputCode}&mode=student`);
+  };
 
-      const data = await response.json();
-      console.log('Join classroom response:', data);
-      
-      if (data.error) {
-        console.error('Error joining classroom:', data.error);
-        setError(data.error);
-        return;
-      }
-
-      // Update the class code and students list
-      setClassCode(inputCode.toUpperCase());
-      if (data.students) {
-        console.log('Received student list from join response:', data.students);
-        setStudents(data.students);
-      }
-      
-      // Ensure we're subscribed to the channel
-      const channel = pusherClient.subscribe(`classroom-${inputCode.toUpperCase()}`);
-      console.log('Subscribed to channel:', `classroom-${inputCode.toUpperCase()}`);
-      
-      // Log when the channel is successfully subscribed
-      channel.bind('pusher:subscription_succeeded', () => {
-        console.log('Successfully subscribed to channel:', `classroom-${inputCode.toUpperCase()}`);
-      });
-
-      // Log when the channel subscription fails
-      channel.bind('pusher:subscription_error', (error: any) => {
-        console.error('Failed to subscribe to channel:', error);
-      });
-      
-      console.log('Successfully joined classroom:', inputCode.toUpperCase());
-    } catch (err) {
-      console.error('Error joining classroom:', err);
-      setError('Failed to join classroom');
-    }
+  const removeStudent = (id: string) => {
+    setStudents((prevStudents) => prevStudents.filter((student) => student.id !== id));
+    socket.emit('remove-student', { studentId: id, classCode });
   };
 
   if (!isConnected) {
@@ -281,11 +293,7 @@ export default function Home() {
               {error || 'Connecting to GalleryBoard server now...'}
             </p>
             {error && (
-              <Button
-                onClick={() => window.location.reload()}
-                variant="outline"
-                className="mt-4 w-full"
-              >
+              <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
                 Retry Connection
               </Button>
             )}
@@ -297,19 +305,11 @@ export default function Home() {
 
   if (!classCode) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">GalleryBoard</CardTitle>
-          </CardHeader>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 flex items-center justify-center min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
+        <Card className="w-full max-w-md border-none">
+          <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto" />
           <CardContent className="space-y-4">
-            <Button 
-              onClick={createClassroom}
-              className="w-full"
-              size="lg"
-            >
-              Create Classroom (Teacher)
-            </Button>
             <div className="flex flex-col space-y-2">
               <Input
                 type="text"
@@ -318,17 +318,25 @@ export default function Home() {
                 placeholder="Enter class code"
                 className="text-center"
               />
-              <Button 
+              <Button
                 onClick={joinClassroom}
-                variant="secondary"
                 size="lg"
+                className="w-full bg-blue-500 text-white hover:bg-blue-600"
               >
                 Join Classroom
               </Button>
             </div>
+            <Button
+              onClick={createClassroom}
+              variant="outline"
+              className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
+              size="lg"
+            >
+              Create Classroom (Teacher)
+            </Button>
           </CardContent>
         </Card>
-      </div>
+    </div>
     );
   }
 
@@ -342,19 +350,20 @@ export default function Home() {
     });
     
     return (
-      <div className="p-8">
+      <div className="p-8 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-bold">Class Code: {classCode}</h2>
-                <p className="text-muted-foreground">Connected Students: {students.filter(s => s.id !== studentId).length}</p>
-                <p className="text-sm text-muted-foreground">Debug: {students.length} total students</p>
+                <h2 className="text-2xl font-bold text-black">Class Code: {classCode}</h2>
+                <p className="text-gray-500">Connected Students: {students.length}</p>
               </div>
               {selectedStudent && (
                 <Button
                   onClick={() => setSelectedStudent(null)}
                   variant="outline"
+                  className="text-blue-600 border-blue-600 hover:bg-blue-50"
                 >
                   Back to Grid
                 </Button>
@@ -396,7 +405,6 @@ export default function Home() {
                     studentId={student.id}
                     classCode={classCode}
                     isTeacher={true}
-                    onBoardClick={() => setSelectedStudent(student.id)}
                   />
                 </CardContent>
               </Card>
@@ -408,11 +416,12 @@ export default function Home() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
       <Card className="mb-6">
         <CardContent className="p-6">
-          <h2 className="text-2xl font-bold">Class Code: {classCode}</h2>
-          <p className="text-muted-foreground">Your Name: {displayName}</p>
+          <h2 className="text-2xl font-bold text-gray-700">Class Code: {classCode}</h2>
+          <p className="text-gray-500">Your Name: {displayName}</p>
         </CardContent>
       </Card>
       <Card>
@@ -426,4 +435,4 @@ export default function Home() {
       </Card>
     </div>
   );
-} 
+}
