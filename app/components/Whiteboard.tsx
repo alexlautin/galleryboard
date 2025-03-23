@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { useRouter } from 'next/router'; // Import useRouter for navigation
 
 interface WhiteboardProps {
   socket: Socket;
@@ -25,7 +24,6 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
   const [tool, setTool] = useState<'draw' | 'erase'>('draw');
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null);
   const [canvasState, setCanvasState] = useState<string | null>(null); // Manage canvas state
-  const router = useRouter(); // Hook to handle page navigation
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -223,11 +221,6 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     });
   };
 
-  // Navigate back to the homepage
-  const handleBackClick = () => {
-    router.push('/'); // Or use window.location.href = '/' for regular navigation
-  };
-
   return (
     <div className="relative border border-input rounded-lg shadow-md" onClick={onBoardClick}>
       <canvas
@@ -239,27 +232,6 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
-      
-      {/* Back Arrow */}
-      <button 
-        onClick={handleBackClick} 
-        className="absolute top-4 right-4 p-2 rounded-full bg-white shadow-lg"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-6 h-6 text-gray-800"
-        >
-          <path d="M19 12H5" />
-          <path d="M12 5l-7 7 7 7" />
-        </svg>
-      </button>
-
       {!isTeacher && (
         <div className="absolute bottom-4 left-4 flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 rounded-lg shadow-md border border-input">
           <TooltipProvider>
