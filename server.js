@@ -11,7 +11,9 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
   },
 });
-
+app.get('/', (req, res) => {
+  res.send('Socket.IO server is running');
+});
 // Store classroom data and used names
 const classrooms = new Map();
 const usedNames = new Map(); // Track used names per classroom
@@ -112,7 +114,7 @@ io.on('connection', (socket) => {
 });
 
 // Use Heroku's dynamic port or default to 3000
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 httpServer.listen(PORT, () => {
   console.log(`Socket.IO server running on port ${PORT}`);
