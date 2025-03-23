@@ -1,12 +1,10 @@
-import { Server as NetServer } from 'http';
 import { NextApiResponse } from 'next';
-import { Server as ServerIO } from 'socket.io';
 
 export interface DrawData {
-  points: { x: number; y: number }[];
+  points: Array<{ x: number; y: number }>;
   color: string;
   width: number;
-  type: 'draw' | 'erase';
+  type: string;
 }
 
 export interface Student {
@@ -14,20 +12,14 @@ export interface Student {
   displayName: string;
 }
 
-export interface ServerToClientEvents {
-  'draw-update-received': (data: {
-    studentId: string;
-    drawData: DrawData | null;
-    canvasState: string;
-  }) => void;
-  'canvas-state-update': (data: {
-    studentId: string;
-    canvasState: string;
-  }) => void;
-  'classroom-created': (data: {
-    classCode: string;
-    teacherId: string;
-  }) => void;
+export interface DrawUpdateData {
+  studentId: string;
+  drawData: DrawData | null;
+  canvasState: string | null;
+}
+
+export interface BaseEvents {
+  'draw-update': (data: DrawUpdateData) => void;
   'student-joined': (data: {
     studentId: string;
     displayName: string;
@@ -36,8 +28,9 @@ export interface ServerToClientEvents {
   'student-left': (data: {
     students: Student[];
   }) => void;
-  'name-assigned': (data: {
-    displayName: string;
+  'classroom-created': (data: {
+    classCode: string;
+    teacherId: string;
   }) => void;
   'error': (data: {
     message: string;
@@ -45,12 +38,13 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  'create-classroom': (teacherId: string) => void;
+  'draw-update': (data: DrawUpdateData & { classCode: string }) => void;
   'join-classroom': (data: {
     classCode: string;
     studentId: string;
     displayName: string;
   }) => void;
+<<<<<<< HEAD
   'draw-start': (data: {
     classCode: string;
     studentId: string;
@@ -76,17 +70,28 @@ export interface ClientToServerEvents {
   'clear-canvas': (data: {
     classCode: string;
     studentId: string;
+=======
+  'leave-classroom': (data: {
+    classCode: string;
+    studentId: string;
+>>>>>>> main
   }) => void;
-  'request-canvas-state': (data: {
+}
+
+export interface ServerToClientEvents extends BaseEvents {}
+
+export interface PusherEvents extends BaseEvents {
+  'join-classroom': (data: {
+    classCode: string;
+    studentId: string;
+    displayName: string;
+  }) => void;
+  'leave-classroom': (data: {
     classCode: string;
     studentId: string;
   }) => void;
 }
 
 export interface NextApiResponseServerIO extends NextApiResponse {
-  socket: any & {
-    server: NetServer & {
-      io: ServerIO<ClientToServerEvents, ServerToClientEvents>;
-    };
-  };
+  socket: any;
 } 

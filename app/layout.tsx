@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "GalleryBoard",
-  description: "Interactive whiteboard for classrooms",
+  description: "Interactive whiteboard for classroom collaboration",
 };
 
 export default function RootLayout({

@@ -27,6 +27,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
   const [canvasState, setCanvasState] = useState<string | null>(null); // Manage canvas state
   const router = useRouter(); // Hook to handle page navigation
 
+  // Set up high-resolution canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -83,20 +84,33 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     };
   }, [socket, studentId, classCode, isTeacher, selectedStudentId]);
 
-  const loadCanvasState = (canvasState: string) => {
+  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.PointerEvent) => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
+    if (!canvas) return null;
 
-    const img = new Image();
-    img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    };
-    img.src = canvasState;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / (rect.width * 2); // Account for the 2x scaling
+    const scaleY = canvas.height / (rect.height * 2);
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    return { x, y };
   };
 
-  const drawOnCanvas = (drawData: DrawData) => {
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isTeacher) return;
+    
+    const coords = getCanvasCoordinates(e);
+    if (!coords) return;
+
+    setIsDrawing(true);
+    setLastPoint(coords);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || isTeacher) return;
+
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx || !drawData?.points?.length) return;
@@ -148,6 +162,8 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     
     const coords = getCanvasCoordinates(e);
     if (!coords) return;
+    const coords = getCanvasCoordinates(e);
+    if (!coords) return;
 
     setIsDrawing(true);
     setLastPoint(coords);
@@ -192,6 +208,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     }
 
     setLastPoint(coords);
+    setLastPoint(coords);
   };
 
   const handlePointerUp = () => {
@@ -201,13 +218,18 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     // Send final canvas state when drawing ends
     const canvas = canvasRef.current;
     if (canvas && !isTeacher) {
-      const canvasState = canvas.toDataURL();
-      socket.emit('draw-update', { 
-        classCode, 
-        studentId, 
-        drawData: null,
-        canvasState
-      });
+      const canvasState = canvas.toDataURL('image/jpeg', 0.5); // Compress the image
+      fetch('/api/pusher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'draw-update',
+          classCode,
+          studentId,
+          drawData: null,
+          canvasState
+        })
+      }).catch(console.error);
     }
   };
 
