@@ -7,7 +7,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "https://your-frontend-domain.com", // Replace with your frontend's URL
+    origin: "https://galleryboard-c40d6d5bdb50.herokuapp.com/", // Replace with your frontend's URL
     methods: ["GET", "POST"],
   },
 });
