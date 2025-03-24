@@ -5,6 +5,7 @@ const path = require('path');
 
 const app = express();
 const httpServer = createServer(app);
+const PORT = process.env.PORT || 3000;
 
 // Set up Socket.IO with CORS for Vercel and localhost dev
 const io = new Server(httpServer, {
@@ -12,17 +13,11 @@ const io = new Server(httpServer, {
     origin: [
       "https://galleryboard.vercel.app",
       "https://galleryboard.vercel.app/",
-      "*", // Allow all origins
       "http://localhost:3000",
     ],
     methods: ["GET", "POST"],
     credentials: true,
   },
-});
-
-// Simple test route
-app.get('/', (req, res) => {
-  res.send('Socket.IO server is running');
 });
 
 // --- Classroom Management ---
@@ -125,9 +120,12 @@ io.on('connection', (socket) => {
   });
 });
 
-// Use Render's dynamic port or default to 3001
-const PORT = process.env.PORT || 3001;
+// Simple health check endpoint
+app.get('/health', (req, res) => {
+  res.send('Socket.IO server is running');
+});
 
+// Start the HTTP server
 httpServer.listen(PORT, () => {
   console.log(`Socket.IO server running on port ${PORT}`);
 });
