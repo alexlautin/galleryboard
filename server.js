@@ -11,6 +11,8 @@ const io = new Server(httpServer, {
   cors: {
     origin: [
       "https://galleryboard.vercel.app",
+      "https://galleryboard.vercel.app/",
+      "*", // Allow all origins
       "http://localhost:3000",
     ],
     methods: ["GET", "POST"],
