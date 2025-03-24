@@ -29,10 +29,10 @@ export default function Home() {
     const initSocket = async () => {
       console.log("⚡ initializing socket...");
       try {
-        const socketUrl = 'https://galleryboard.onrender.com';
+        const socketUrl = 'https://galleryboard.onrender.com/';
         socket = io(socketUrl, {
           transports: ['websocket'],      // Force WebSocket (no long-polling fallback)
-          withCredentials: true,          // Allow cookies if needed (aligns with CORS)
+          withCredentials: false,          // Allow cookies if needed (aligns with CORS)
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           autoConnect: true,
