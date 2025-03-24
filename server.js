@@ -10,6 +10,8 @@ const dev = process.env.NODE_ENV !== 'production';
 const nextApp = next({ dev });
 const handle = nextApp.getRequestHandler();
 
+const PORT = process.env.PORT || 3001;
+
 // Set up Socket.IO with CORS for Vercel and localhost dev
 const io = new Server(httpServer, {
   cors: {
