@@ -2,10 +2,13 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const next = require('next');
 
 const app = express();
 const httpServer = createServer(app);
-const PORT = process.env.PORT || 3000;
+const dev = process.env.NODE_ENV !== 'production';
+const nextApp = next({ dev });
+const handle = nextApp.getRequestHandler();
 
 // Set up Socket.IO with CORS for Vercel and localhost dev
 const io = new Server(httpServer, {
@@ -120,12 +123,14 @@ io.on('connection', (socket) => {
   });
 });
 
-// Simple health check endpoint
-app.get('/health', (req, res) => {
-  res.send('Socket.IO server is running');
-});
+nextApp.prepare().then(() => {
+  // Serve Next.js pages
+  app.all('*', (req, res) => {
+    return handle(req, res);
+  });
 
-// Start the HTTP server
-httpServer.listen(PORT, () => {
-  console.log(`Socket.IO server running on port ${PORT}`);
+  // Start the HTTP server after preparing Next.js
+  httpServer.listen(PORT, () => {
+    console.log(`Socket.IO + Next.js server running on port ${PORT}`);
+  });
 });
