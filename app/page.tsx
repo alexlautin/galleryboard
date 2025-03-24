@@ -25,21 +25,20 @@ export default function Home() {
   const [displayName, setDisplayName] = useState('');
   const [editableDisplayName, setEditableDisplayName] = useState('');
 
-    useEffect(() => {
+  useEffect(() => {
     const initSocket = async () => {
-      console.log("⚡ Initializing socket...");
+      console.log("⚡ initializing socket...");
       try {
-        const socketUrl = 'https://galleryboard.onrender.com'; // Replace with your backend URL
+        const socketUrl = 'https://galleryboard.onrender.com/';
         socket = io(socketUrl, {
-          transports: ['websocket'], // Force WebSocket (no long-polling fallback)
-          withCredentials: true,     // Allow cookies if needed (aligns with CORS)
+          transports: ['websocket'],      // Force WebSocket (no long-polling fallback)
+          withCredentials: true,          // Allow cookies if needed (aligns with CORS)
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           autoConnect: true,
         });
-  
-        console.log("✅ Socket.IO initialized");
-  
+        console.log("✅ socket.io initialized");
+
         let connectedOnce = false;
         socket.on('connect', () => {
           console.log('Connected to server. Socket ID:', socket.id);
@@ -52,35 +51,38 @@ export default function Home() {
             setEditableDisplayName(newName);
           }
         });
-  
+
         socket.on('connect_error', (err) => {
           console.error("🔴 Socket connection error:", err);
           if (!connectedOnce) {
-            setError('Failed to connect to GalleryBoard server. Please try again.');
-            setIsConnected(false);
+          console.error('Socket connection error:', err);
+          setError('Failed to connect to GalleryBoard server. Please try again.');
+          setIsConnected(false);
           }
         });
-  
+
         socket.on('classroom-created', ({ classCode: newClassCode }) => {
           setClassCode(newClassCode);
           window.history.pushState(null, '', `?classCode=${newClassCode}&mode=teacher`);
         });
-  
+
         socket.on('student-joined', ({ students: updatedStudents }) => {
           setStudents(updatedStudents);
         });
-  
+
         socket.on('student-left', ({ students: updatedStudents }) => {
           setStudents(updatedStudents);
         });
+
+        // await fetch('/api/socket/io');
       } catch (error) {
         console.error('Failed to initialize connection:', error);
         setError('Failed to initialize connection. Please refresh the page.');
       }
     };
-  
+
     initSocket();
-  
+
     return () => {
       if (socket) {
         socket.disconnect();
@@ -130,7 +132,7 @@ bg-[size:20px_20px]">
         <Card className="w-full max-w-md bg-[#fdfdfd] border-2 border-[#e6e4e0] rounded-lg">
           <CardContent className="p-6 space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="text-center text-gray-700">{error || 'Connecting to GalleryBoard server...'}</p>
+            <p className="text-center text-gray-700">{error || 'Error: Not connected to gallery board server!'}</p>
             {error && (
               <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
                 Retry Connection
