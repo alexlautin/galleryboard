@@ -25,20 +25,21 @@ export default function Home() {
   const [displayName, setDisplayName] = useState('');
   const [editableDisplayName, setEditableDisplayName] = useState('');
 
-  useEffect(() => {
+    useEffect(() => {
     const initSocket = async () => {
-      console.log("⚡ initializing socket...");
+      console.log("⚡ Initializing socket...");
       try {
-        const socketUrl = 'https://galleryboard.onrender.com/';
+        const socketUrl = 'https://galleryboard.onrender.com'; // Replace with your backend URL
         socket = io(socketUrl, {
-          transports: ['websocket'],      // Force WebSocket (no long-polling fallback)
-          withCredentials: false,          // Allow cookies if needed (aligns with CORS)
+          transports: ['websocket'], // Force WebSocket (no long-polling fallback)
+          withCredentials: true,     // Allow cookies if needed (aligns with CORS)
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           autoConnect: true,
         });
-        console.log("✅ socket.io initialized");
-
+  
+        console.log("✅ Socket.IO initialized");
+  
         let connectedOnce = false;
         socket.on('connect', () => {
           console.log('Connected to server. Socket ID:', socket.id);
@@ -51,38 +52,35 @@ export default function Home() {
             setEditableDisplayName(newName);
           }
         });
-
+  
         socket.on('connect_error', (err) => {
           console.error("🔴 Socket connection error:", err);
           if (!connectedOnce) {
-          console.error('Socket connection error:', err);
-          setError('Failed to connect to GalleryBoard server. Please try again.');
-          setIsConnected(false);
+            setError('Failed to connect to GalleryBoard server. Please try again.');
+            setIsConnected(false);
           }
         });
-
+  
         socket.on('classroom-created', ({ classCode: newClassCode }) => {
           setClassCode(newClassCode);
           window.history.pushState(null, '', `?classCode=${newClassCode}&mode=teacher`);
         });
-
+  
         socket.on('student-joined', ({ students: updatedStudents }) => {
           setStudents(updatedStudents);
         });
-
+  
         socket.on('student-left', ({ students: updatedStudents }) => {
           setStudents(updatedStudents);
         });
-
-        // await fetch('/api/socket/io');
       } catch (error) {
         console.error('Failed to initialize connection:', error);
         setError('Failed to initialize connection. Please refresh the page.');
       }
     };
-
+  
     initSocket();
-
+  
     return () => {
       if (socket) {
         socket.disconnect();
