@@ -1,20 +1,84 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
 import Whiteboard from './components/Whiteboard';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { generateTwoWordName } from '@/lib/name-generator';
-import type { ClientToServerEvents, ServerToClientEvents, Student as StudentType } from '@/types/socket';
-
-let socket: Socket<ServerToClientEvents, ClientToServerEvents>;
+import { supabase } from '@/lib/supabaseClient';
+import type { Student as StudentType } from '@/types/socket';
+import { useRouter } from 'next/navigation';
 
 interface Student extends StudentType {}
 
+interface DrawingPreviewProps {
+  studentId: string;
+  classCode: string;
+}
+
+const DrawingPreview = ({ studentId, classCode }: DrawingPreviewProps) => {
+  const [preview, setPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPreview = async () => {
+      const { data, error } = await supabase
+        .from('drawing_updates')
+        .select('canvas_state')
+        .eq('student_id', studentId)
+        .eq('classroom_code', classCode) // filter by room code
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching drawing preview for', studentId, error);
+      } else {
+        setPreview(data?.canvas_state || null); // Set the Base64 string
+      }
+    };
+
+    fetchPreview();
+
+    const channel = supabase
+      .channel('drawing-preview')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'drawing_updates',
+          filter: `student_id=eq.${studentId}&classroom_code=eq.${classCode}`,
+        },
+        (payload) => {
+          console.log('Realtime drawing preview payload:', payload);
+          if (payload.new?.canvas_state) {
+            setPreview(payload.new.canvas_state); // Update the preview on new data
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [studentId, classCode]);
+
+  return preview ? (
+    <img
+      src={preview.startsWith('data:image') ? preview : `data:image/png;base64,${preview}`}
+      alt="Drawing Preview"
+      className="w-full h-auto rounded-lg"
+    />
+  ) : (
+    <div className="w-full h-48 bg-gray-200 flex items-center justify-center rounded-lg">
+      <span className="text-gray-500">No preview available</span>
+    </div>
+  );
+};
+
 export default function Home() {
-  const [isConnected, setIsConnected] = useState(false);
+  const router = useRouter();
   const [isTeacher, setIsTeacher] = useState(false);
   const [classCode, setClassCode] = useState('');
   const [inputCode, setInputCode] = useState('');
@@ -24,123 +88,115 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [editableDisplayName, setEditableDisplayName] = useState('');
+  const [classroomId, setClassroomId] = useState<number | null>(null);
 
-  useEffect(() => {
-    const initSocket = async () => {
-      console.log("⚡ initializing socket...");
-      try {
-        const socketUrl = 'https://galleryboard.onrender.com';
-        socket = io(socketUrl, {
-          transports: ['websocket'],      // Force WebSocket (no long-polling fallback)
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
-          autoConnect: true,
-        });
-        console.log("✅ socket.io initialized");
-
-        let connectedOnce = false;
-        socket.on('connect', () => {
-          console.log('Connected to server. Socket ID:', socket.id);
-          setIsConnected(true);
-          setError(null);
-          if (socket.id) {
-            setStudentId(socket.id);
-            const newName = generateTwoWordName();
-            setDisplayName(newName);
-            setEditableDisplayName(newName);
-          }
-        });
-
-        socket.on('connect_error', (err) => {
-          console.error("🔴 Socket connection error:", err);
-          if (!connectedOnce) {
-          console.error('Socket connection error:', err);
-          setError('Failed to connect to GalleryBoard server. Please try again.');
-          setIsConnected(false);
-          }
-        });
-
-        socket.on('classroom-created', ({ classCode: newClassCode }) => {
-          setClassCode(newClassCode);
-          window.history.pushState(null, '', `?classCode=${newClassCode}&mode=teacher`);
-        });
-
-        socket.on('student-joined', ({ students: updatedStudents }) => {
-          setStudents(updatedStudents);
-        });
-
-        socket.on('student-left', ({ students: updatedStudents }) => {
-          setStudents(updatedStudents);
-        });
-
-        // await fetch('/api/socket/io');
-      } catch (error) {
-        console.error('Failed to initialize connection:', error);
-        setError('Failed to initialize connection. Please refresh the page.');
-      }
-    };
-
-    initSocket();
-
-    return () => {
-      if (socket) {
-        socket.disconnect();
-      }
-    };
-  }, []);
-
-  const createClassroom = () => {
-    if (!socket || !socket.connected) {
-      setError('Socket not connected yet. Please wait a moment.');
+    const createClassroom = async () => {
+    setIsTeacher(true);
+    const newClassCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  
+    console.log('Creating classroom with code:', newClassCode);
+  
+    const { data, error } = await supabase
+      .from('classrooms')
+      .insert([{ class_code: newClassCode, teacher_id: 'teacher_placeholder' }])
+      .select('*');
+  
+    if (error) {
+      console.error('Error creating classroom:', error.message);
+      setError(`Failed to create classroom: ${error.message}`);
       return;
     }
-    setIsTeacher(true);
-    if (socket.id) {
-      socket.emit('create-classroom', socket.id);
-    } else {
-      setError('Socket ID is undefined. Please try again.');
+  
+    if (!data || data.length === 0) {
+      console.error('No data returned from Supabase');
+      setError('Failed to create classroom: No data returned.');
+      return;
     }
+  
+    console.log('Classroom created successfully:', data);
+    setClassCode(newClassCode);
+    setClassroomId(data[0].id);
   };
 
-  const joinClassroom = () => {
-    if (!socket.id || !inputCode) return;
-    socket.emit('join-classroom', {
-      classCode: inputCode,
-      studentId: socket.id,
-      displayName: displayName,
-    });
+  const joinClassroom = async () => {
+    if (!inputCode) return;
+
+    // Generate a unique student ID
+    const newStudentId = Math.random().toString(36).substring(2, 10);
+
+    // If displayName is empty, generate a random two-word name
+    const nameToUse = displayName || generateTwoWordName();
+
+    console.log('Attempting to join room with:', { inputCode, newStudentId, nameToUse });
+
+    // Query the classrooms table to get the numeric id using the room code
+    const { data: classroomData, error: classroomError } = await supabase
+      .from('classrooms')
+      .select('id')
+      .eq('class_code', inputCode)
+      .single();
+
+    if (classroomError) {
+      setError(classroomError.message);
+      return;
+    }
+
+    // Insert a new student record into the 'classroom_students' table using the numeric classroom id
+    const { data, error } = await supabase
+      .from('classroom_students')
+      .insert([{ classroom_id: classroomData.id, student_id: newStudentId, display_name: nameToUse }])
+      .single();
+
+    console.log('Join response:', { data, error });
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    // Set the student ID, display name, and classroomId state
+    setStudentId(newStudentId);
+    setDisplayName(nameToUse);
+    setClassroomId(classroomData.id);
+    
+    // Use the room code for display
     setClassCode(inputCode);
-    window.history.pushState(null, '', `?classCode=${inputCode}&mode=student`);
   };
-
-  const removeStudent = (id: string) => {
-    setStudents((prevStudents) => prevStudents.filter((student) => student.id !== id));
-    socket.emit('remove-student', { studentId: id, classCode });
-  };
-
+  
   useEffect(() => {
-    if (isTeacher && selectedStudent) {
-      socket.emit('request-canvas-state', { studentId: selectedStudent, classCode });
-    }
-  }, [isTeacher, selectedStudent, classCode]);
+    if (!classroomId) return;
+  
+    const channel = supabase.channel('student-insert')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'classroom_students',
+          filter: `classroom_id=eq.${classroomId}`
+        },
+        (payload) => {
+          console.log('Realtime INSERT payload:', payload);
+          setStudents(prevStudents => [...prevStudents, payload.new as Student]);
+        }
+      )
+      .subscribe();
+  
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [classroomId]);
 
-  if (!isConnected) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
-bg-[size:20px_20px]">
-        <Card className="w-full max-w-md bg-[#fdfdfd] border-2 border-[#e6e4e0] rounded-lg">
-          <CardContent className="p-6 space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="text-center text-gray-700">{error || 'Error: Not connected to gallery board server!'}</p>
-            {error && (
-              <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
-                Retry Connection
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    );
+  const removeStudent = async (id: string) => {
+    setStudents((prevStudents) => prevStudents.filter((student) => student.id !== id));
+    const { error } = await supabase
+      .from('classroom_students')
+      .delete()
+      .eq('student_id', id)
+      .eq('classroom_id', classroomId!);
+    if (error) {
+      setError(error.message);
+    }
   }
 
   if (!classCode) {
@@ -196,7 +252,6 @@ bg-[size:20px_20px]">
         </Card>
 
         {selectedStudent ? (
-          // Full-screen overlay
           <div className="fixed inset-0 z-50 flex flex-col bg-white">
             <div className="flex justify-between items-center p-4 shadow">
               <h2 className="text-2xl font-bold">Viewing {selectedStudent}&apos;s Board</h2>
@@ -209,15 +264,13 @@ bg-[size:20px_20px]">
             </div>
             <div className="flex-1 overflow-auto p-4">
               <Whiteboard
-                socket={socket}
                 studentId={selectedStudent}
                 classCode={classCode}
-                isTeacher={true}
+                readOnly
               />
             </div>
           </div>
         ) : (
-          // Grid of student boards
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {students.map((student) => (
               <Card
@@ -235,11 +288,9 @@ bg-[size:20px_20px]">
                   X
                 </button>
                 <CardContent className="p-4">
-                  <Whiteboard
-                    socket={socket}
+                  <DrawingPreview
                     studentId={student.id}
                     classCode={classCode}
-                    isTeacher={true}
                   />
                   <p className="mt-2 text-center text-sm text-black">{student.displayName}</p>
                 </CardContent>
@@ -262,7 +313,7 @@ bg-[size:20px_20px]">
       </Card>
       <Card>
         <CardContent className="p-6">
-          <Whiteboard socket={socket} studentId={studentId} classCode={classCode} />
+          <Whiteboard studentId={studentId} classCode={classCode} />
         </CardContent>
       </Card>
     </div>

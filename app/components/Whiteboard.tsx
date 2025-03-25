@@ -1,25 +1,38 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Socket } from 'socket.io-client';
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { DrawData } from '@/types/socket';
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { useRouter } from 'next/navigation'; // Import useRouter for navigation
+import { supabase } from '@/lib/supabaseClient';
 
 interface WhiteboardProps {
-  socket: Socket;
   studentId: string;
   classCode: string;
+  classroomId?: number; // New prop for numeric classroom id
   isTeacher?: boolean;
+  selectedStudentId?: string; // For teacher view, the id of the student whose board is shown
   onBoardClick?: () => void;
-  selectedStudentId?: string; // Added prop for teacher-selected student
+  readOnly?: boolean;
 }
 
-export default function Whiteboard({ socket, studentId, classCode, isTeacher, onBoardClick, selectedStudentId }: WhiteboardProps) {
+const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
+  studentId,
+  classCode,
+  classroomId,
+  isTeacher,
+  onBoardClick,
+  selectedStudentId,
+  readOnly
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Expose the canvas element to parent refs
+  useImperativeHandle(ref, () => canvasRef.current as HTMLCanvasElement);
+
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [tool, setTool] = useState<'draw' | 'erase'>('draw');
@@ -47,41 +60,66 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     ctx.fillRect(0, 0, width, height);
 
     // Request initial canvas state if we're a teacher viewing a student's board
-    if (isTeacher && selectedStudentId) {
-      socket.emit('request-canvas-state', { classCode, studentId: selectedStudentId });
+    if (isTeacher && selectedStudentId && classroomId) {
+      supabase
+        .from('drawing_updates')
+        .select('*')
+        .eq('classroom_id', classroomId)
+        .eq('student_id', selectedStudentId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            const update = data[0];
+            if (update.canvas_state) {
+              loadCanvasState(update.canvas_state);
+            } else if (update.draw_data) {
+              drawOnCanvas(update.draw_data);
+            }
+          }
+        });
     }
+  }, [classCode, isTeacher, selectedStudentId, classroomId]);
 
-    // Handle receiving draw updates
-    socket.on('draw-update-received', ({ studentId: drawingStudentId, drawData, canvasState }) => {
-      if (drawingStudentId === studentId || (isTeacher && selectedStudentId === drawingStudentId)) {
-        if (canvasState) {
-          loadCanvasState(canvasState);
-        } else if (drawData) {
-          drawOnCanvas(drawData);
+  useEffect(() => {
+    const filterField = classroomId ? `classroom_id=eq.${classroomId}` : `classroom_code=eq.${classCode}`;
+    const channel = supabase.channel('drawing-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'drawing_updates',
+          filter: filterField
+        },
+        (payload) => {
+          console.log('Drawing update payload:', payload);
+          const { student_id, draw_data, canvas_state } = payload.new;
+          if (isTeacher) {
+            if (!selectedStudentId || selectedStudentId === student_id) {
+              if (canvas_state) {
+                loadCanvasState(canvas_state);
+              } else if (draw_data) {
+                drawOnCanvas(draw_data);
+              }
+            }
+          } else {
+            if (student_id === studentId) {
+              if (canvas_state) {
+                loadCanvasState(canvas_state);
+              } else if (draw_data) {
+                drawOnCanvas(draw_data);
+              }
+            }
+          }
         }
-      }
-    });
-
-    // Handle receiving full canvas state
-    socket.on('canvas-state-update', ({ studentId: updatedStudentId, canvasState }) => {
-      if (updatedStudentId === studentId && canvasState) {
-        loadCanvasState(canvasState);
-      }
-    });
-
-    // Handle loading saved canvas state
-    socket.on('load-canvas', ({ studentId: loadStudentId, canvasData }) => {
-      if (loadStudentId === studentId && canvasData) {
-        loadCanvasState(canvasData);
-      }
-    });
-
+      )
+      .subscribe();
+    
     return () => {
-      socket.off('draw-update-received');
-      socket.off('canvas-state-update');
-      socket.off('load-canvas');
+      channel.unsubscribe();
     };
-  }, [socket, studentId, classCode, isTeacher, selectedStudentId]);
+  }, [classroomId, classCode, studentId, isTeacher, selectedStudentId]);
 
   const loadCanvasState = (canvasState: string) => {
     const canvas = canvasRef.current;
@@ -141,7 +179,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (isTeacher) {
+    if (readOnly) {
       if (onBoardClick) onBoardClick();
       return;
     }
@@ -163,7 +201,7 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDrawing || isTeacher || !lastPoint) return;
+    if (!isDrawing || readOnly || !lastPoint) return;
 
     const coords = getCanvasCoordinates(e);
     if (!coords) return;
@@ -177,17 +215,16 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
 
     drawOnCanvas(drawData);
 
-    // Get current canvas state
     const canvas = canvasRef.current;
     if (canvas) {
       const canvasState = canvas.toDataURL();
-      
-      // Emit both the draw data and canvas state
-      socket.emit('draw-update', { 
-        classCode, 
-        studentId, 
-        drawData,
-        canvasState
+      const updateObj = classroomId ? { classroom_id: classroomId } : { classroom_code: classCode };
+      supabase.from('drawing_updates').insert([
+        { ...updateObj, student_id: studentId, draw_data: drawData, canvas_state: canvasState }
+      ]).then(({ error }) => {
+        if (error) {
+          console.error('Error in handlePointerMove insert:', error);
+        }
       });
     }
 
@@ -195,18 +232,20 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
   };
 
   const handlePointerUp = () => {
+    if (readOnly) return;
     setIsDrawing(false);
     setLastPoint(null);
 
-    // Send final canvas state when drawing ends
     const canvas = canvasRef.current;
-    if (canvas && !isTeacher) {
+    if (canvas) {
       const canvasState = canvas.toDataURL();
-      socket.emit('draw-update', { 
-        classCode, 
-        studentId, 
-        drawData: null,
-        canvasState
+      const updateObj = classroomId ? { classroom_id: classroomId } : { classroom_code: classCode };
+      supabase.from('drawing_updates').insert([
+        { ...updateObj, student_id: studentId, draw_data: [] }
+      ]).then(({ error }) => {
+        if (error) {
+          console.error('Error in handlePointerUp insert:', error);
+        }
       });
     }
   };
@@ -219,13 +258,14 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Send cleared canvas state
     const canvasState = canvas.toDataURL();
-    socket.emit('draw-update', { 
-      classCode, 
-      studentId, 
-      drawData: null,
-      canvasState
+    const updateObj = classroomId ? { classroom_id: classroomId } : { classroom_code: classCode };
+    supabase.from('drawing_updates').insert([
+      { ...updateObj, student_id: studentId, draw_data: [] }
+    ]).then(({ error }) => {
+      if (error) {
+        console.error('Error in clearCanvas insert:', error);
+      }
     });
   };
 
@@ -378,4 +418,6 @@ export default function Whiteboard({ socket, studentId, classCode, isTeacher, on
       )}
     </div>
   );
-}
+});
+
+export default Whiteboard;

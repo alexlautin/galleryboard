@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node server.js",
-    "postinstall": "npm run build", 
+    "postinstall": "npm run build",
     "lint": "next lint"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "@radix-ui/react-separator": "^1.0.3",
     "@radix-ui/react-slot": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.0.7",
+    "@supabase/supabase-js": "^2.49.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "express": "^4.21.2",
@@ -28,6 +29,7 @@
     "socket": "^0.14.66",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
+    "supabase": "^2.19.7",
     "tailwind-merge": "^2.2.1",
     "tailwindcss": "^3.3.0",
     "tailwindcss-animate": "^1.0.7"
