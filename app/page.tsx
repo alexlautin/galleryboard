@@ -9,6 +9,11 @@ import { generateTwoWordName } from '@/lib/name-generator';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 
+type Student = {
+  student_id: string;
+  displayName: string;
+};
+
 interface DrawingPreviewProps {
   studentId: string;
   classCode: string;

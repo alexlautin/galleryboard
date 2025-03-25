@@ -8,6 +8,13 @@ import { Separator } from "@/components/ui/separator";
 import { useRouter } from 'next/navigation'; // Import useRouter for navigation
 import { supabase } from '@/lib/supabaseClient';
 
+type DrawData = {
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+  type: 'draw' | 'erase';
+};
+
 interface WhiteboardProps {
   studentId: string;
   classCode: string;
@@ -302,50 +309,6 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     router.push('/'); // Or use window.location.href = '/' for regular navigation
   };
 
-  // Cleanup: clear the student's drawing updates when the whiteboard unmounts
-  useEffect(() => {
-    return () => {
-      // Determine the filter field: use classroom_id if available, otherwise classroom_code
-      const filterField = classroomId ? 'classroom_id' : 'classroom_code';
-      const filterValue = classroomId ? classroomId : classCode;
-      
-      supabase
-        .from('drawing_updates')
-        .delete()
-        .eq('student_id', studentId)
-        .eq(filterField, filterValue)
-        .then(({ error }) => {
-          if (error) {
-            console.error('Error clearing drawings on exit:', error);
-          } else {
-            console.log('Successfully cleared drawing updates on exit.');
-          }
-        });
-    };
-  }, [studentId, classroomId, classCode]);
-  
-  // Additional cleanup: delete drawing_updates when the page is closed using the beforeunload event
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      const filterField = classroomId ? `classroom_id=eq.${classroomId}` : `classroom_code=eq.${classCode}`;
-      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/drawing_updates?student_id=eq.${studentId}&${filterField}`;
-  
-      // Use fetch with keepalive so the request is sent during page unload
-      fetch(url, {
-        method: 'DELETE',
-        headers: {
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        keepalive: true,
-      });
-    };
-  
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [studentId, classroomId, classCode]);
-  
   return (
     <div className="relative border border-input rounded-lg shadow-md" onClick={onBoardClick}>
       <canvas
