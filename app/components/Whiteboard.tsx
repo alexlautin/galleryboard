@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { DrawData } from '@/types/socket';
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

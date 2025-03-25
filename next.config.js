@@ -1,4 +1,4 @@
-/**** @type {import('next').NextConfig} */
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
@@ -9,19 +9,6 @@ const nextConfig = {
       'bufferutil': 'commonjs bufferutil',
     });
     return config;
-  },
-  async headers() {
-    return [
-      {
-        source: '/api/socket/io',
-        headers: [
-          {
-            key: 'Connection',
-            value: 'Upgrade',
-          },
-        ],
-      },
-    ];
   },
 };
 

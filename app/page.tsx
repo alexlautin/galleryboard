@@ -7,12 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { generateTwoWordName } from '@/lib/name-generator';
 import { supabase } from '@/lib/supabaseClient';
-import type { Student as StudentType } from '@/types/socket';
 import { useRouter } from 'next/navigation';
-
-interface Student extends StudentType {
-  student_id: string;
-}
 
 interface DrawingPreviewProps {
   studentId: string;
