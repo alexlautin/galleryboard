@@ -29,6 +29,9 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
   readOnly
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lastSentRef = useRef<number>(Date.now());
+  const drawBufferRef = useRef<DrawData[]>([]);
+  const [currentStroke, setCurrentStroke] = useState<DrawData | null>(null); // New state for current stroke
 
   // Expose the canvas element to parent refs
   useImperativeHandle(ref, () => canvasRef.current as HTMLCanvasElement);
@@ -93,8 +96,9 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
           filter: filterField
         },
         (payload) => {
-          console.log('Drawing update payload:', payload);
-          const { student_id, draw_data, canvas_state } = payload.new;
+            console.log('Drawing update payload:', payload);
+            const { student_id, draw_data, canvas_state } = payload.new;
+            console.log("Filter check:", { isTeacher, selectedStudentId, student_id, studentId });
           if (isTeacher) {
             if (!selectedStudentId || selectedStudentId === student_id) {
               if (canvas_state) {
@@ -189,45 +193,27 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
 
     setIsDrawing(true);
     setLastPoint(coords);
-
-    const drawData: DrawData = {
+    setCurrentStroke({
       points: [coords],
       color: tool === 'erase' ? '#ffffff' : color,
       width: 2,
       type: tool
-    };
-
-    drawOnCanvas(drawData);
+    });
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDrawing || readOnly || !lastPoint) return;
+    if (!isDrawing || readOnly || !lastPoint || !currentStroke) return;
 
     const coords = getCanvasCoordinates(e);
     if (!coords) return;
 
-    const drawData: DrawData = {
-      points: [lastPoint, coords],
-      color: tool === 'erase' ? '#ffffff' : color,
-      width: 2,
-      type: tool
+    const newStroke = {
+      ...currentStroke,
+      points: [...currentStroke.points, coords]
     };
 
-    drawOnCanvas(drawData);
-
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const canvasState = canvas.toDataURL();
-      const updateObj = classroomId ? { classroom_id: classroomId } : { classroom_code: classCode };
-      supabase.from('drawing_updates').insert([
-        { ...updateObj, student_id: studentId, draw_data: drawData, canvas_state: canvasState }
-      ]).then(({ error }) => {
-        if (error) {
-          console.error('Error in handlePointerMove insert:', error);
-        }
-      });
-    }
-
+    setCurrentStroke(newStroke);
+    drawOnCanvas({ ...newStroke, points: [lastPoint, coords] });
     setLastPoint(coords);
   };
 
@@ -236,12 +222,20 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     setIsDrawing(false);
     setLastPoint(null);
 
+    if (currentStroke) {
+      drawBufferRef.current.push(currentStroke);
+      setCurrentStroke(null);
+    }
+
     const canvas = canvasRef.current;
     if (canvas) {
       const canvasState = canvas.toDataURL();
-      const updateObj = classroomId ? { classroom_id: classroomId } : { classroom_code: classCode };
+      const updateObj = {
+        ...(classroomId ? { classroom_id: classroomId } : {}),
+        classroom_code: classCode
+      };
       supabase.from('drawing_updates').insert([
-        { ...updateObj, student_id: studentId, draw_data: [] }
+        { ...updateObj, student_id: studentId, draw_data: [], canvas_state: canvasState }
       ]).then(({ error }) => {
         if (error) {
           console.error('Error in handlePointerUp insert:', error);
@@ -259,9 +253,12 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const canvasState = canvas.toDataURL();
-    const updateObj = classroomId ? { classroom_id: classroomId } : { classroom_code: classCode };
+    const updateObj = {
+      ...(classroomId ? { classroom_id: classroomId } : {}),
+      classroom_code: classCode
+    };
     supabase.from('drawing_updates').insert([
-      { ...updateObj, student_id: studentId, draw_data: [] }
+      { ...updateObj, student_id: studentId, draw_data: [], canvas_state: canvasState }
     ]).then(({ error }) => {
       if (error) {
         console.error('Error in clearCanvas insert:', error);
@@ -269,11 +266,87 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     });
   };
 
+  // Flush buffered strokes to Supabase every 500ms
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const canvas = canvasRef.current;
+      if (!canvas || drawBufferRef.current.length === 0) return;
+
+      const canvasState = canvas.toDataURL();
+      const updateObj = {
+        ...(classroomId ? { classroom_id: classroomId } : {}),
+        classroom_code: classCode
+      };
+
+      const combinedDrawData = drawBufferRef.current;
+      drawBufferRef.current = [];
+
+      supabase.from('drawing_updates').insert([
+        {
+          ...updateObj,
+          student_id: studentId,
+          draw_data: combinedDrawData,
+          canvas_state: canvasState
+        }
+      ]).then(({ error }) => {
+        if (error) {
+          console.error('Error flushing draw buffer:', error);
+        }
+      });
+    }, 100); // flush every 500ms
+
+    return () => clearInterval(interval);
+  }, [classroomId, classCode, studentId]);
+
   // Navigate back to the homepage
   const handleBackClick = () => {
     router.push('/'); // Or use window.location.href = '/' for regular navigation
   };
 
+  // Cleanup: clear the student's drawing updates when the whiteboard unmounts
+  useEffect(() => {
+    return () => {
+      // Determine the filter field: use classroom_id if available, otherwise classroom_code
+      const filterField = classroomId ? 'classroom_id' : 'classroom_code';
+      const filterValue = classroomId ? classroomId : classCode;
+      
+      supabase
+        .from('drawing_updates')
+        .delete()
+        .eq('student_id', studentId)
+        .eq(filterField, filterValue)
+        .then(({ error }) => {
+          if (error) {
+            console.error('Error clearing drawings on exit:', error);
+          } else {
+            console.log('Successfully cleared drawing updates on exit.');
+          }
+        });
+    };
+  }, [studentId, classroomId, classCode]);
+  
+  // Additional cleanup: delete drawing_updates when the page is closed using the beforeunload event
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const filterField = classroomId ? `classroom_id=eq.${classroomId}` : `classroom_code=eq.${classCode}`;
+      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/drawing_updates?student_id=eq.${studentId}&${filterField}`;
+  
+      // Use fetch with keepalive so the request is sent during page unload
+      fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        keepalive: true,
+      });
+    };
+  
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [studentId, classroomId, classCode]);
+  
   return (
     <div className="relative border border-input rounded-lg shadow-md" onClick={onBoardClick}>
       <canvas

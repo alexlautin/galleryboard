@@ -10,7 +10,9 @@ import { supabase } from '@/lib/supabaseClient';
 import type { Student as StudentType } from '@/types/socket';
 import { useRouter } from 'next/navigation';
 
-interface Student extends StudentType {}
+interface Student extends StudentType {
+  student_id: string;
+}
 
 interface DrawingPreviewProps {
   studentId: string;
@@ -28,17 +30,26 @@ const DrawingPreview = ({ studentId, classCode }: DrawingPreviewProps) => {
         .eq('student_id', studentId)
         .eq('classroom_code', classCode) // filter by room code
         .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      console.log('🎯 Supabase response:', { data, error });
 
       if (error) {
         console.error('Error fetching drawing preview for', studentId, error);
       } else {
-        setPreview(data?.canvas_state || null); // Set the Base64 string
+        const canvasState: string | null = data?.[0]?.canvas_state ?? null;
+        console.log("🖼 Raw canvas_state from Supabase:", canvasState);
+        if (canvasState && typeof canvasState === 'string') {
+          setPreview(canvasState);
+        } else {
+          console.warn("⚠️ canvas_state is not a string or is null:", canvasState);
+          setPreview(null);
+        }
       }
     };
 
     fetchPreview();
+    const interval = setInterval(fetchPreview, 5000); // refresh every 5 seconds
 
     const channel = supabase
       .channel('drawing-preview')
@@ -51,28 +62,58 @@ const DrawingPreview = ({ studentId, classCode }: DrawingPreviewProps) => {
           filter: `student_id=eq.${studentId}&classroom_code=eq.${classCode}`,
         },
         (payload) => {
-          console.log('Realtime drawing preview payload:', payload);
-          if (payload.new?.canvas_state) {
-            setPreview(payload.new.canvas_state); // Update the preview on new data
-          }
+          console.log("Canvas preview image length:", preview?.length);
+          console.log("Canvas preview content:", preview);
+          fetchPreview(); // trigger full refresh
         }
       )
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       channel.unsubscribe();
     };
   }, [studentId, classCode]);
 
-  return preview ? (
-    <img
-      src={preview.startsWith('data:image') ? preview : `data:image/png;base64,${preview}`}
-      alt="Drawing Preview"
-      className="w-full h-auto rounded-lg"
-    />
-  ) : (
-    <div className="w-full h-48 bg-gray-200 flex items-center justify-center rounded-lg">
-      <span className="text-gray-500">No preview available</span>
+  console.log("Canvas preview image:", preview);
+  console.log("Preview type:", typeof preview);
+
+  return (
+    <div className="w-full h-72 flex items-center justify-center gap-4 overflow-hidden rounded-lg border-4 border-blue-500 bg-white">
+      {/* Always render known-good base64 image for debugging
+      <img
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/P6/BUQAAAABJRU5ErkJggg=="
+        alt="Test Preview"
+        className="w-24 h-24 border border-yellow-500"
+        onLoad={() => console.log("✅ Hardcoded test image loaded")}
+        onError={(e) => console.error("❌ Hardcoded test image failed", e)}
+      /> */}
+
+      {/* {preview && (
+        <img
+          src={preview.startsWith('data:image') ? preview : `data:image/png;base64,${preview}`}
+          alt="Canvas Preview"
+          className="w-50 h-50 border border-green-500"
+          onLoad={() => console.log("✅ Preview image loaded")}
+          onError={(e) => console.error("❌ Preview image failed to load", e)}
+        />
+      )} */}
+
+      {/* Render actual canvas_state preview */}
+      {preview ? (
+        <img
+          src={preview.startsWith('data:image') ? preview : `data:image/png;base64,${preview}`}
+          alt="Drawing Preview"
+          className="max-h-full max-w-full object-contain"
+          onLoad={() => console.log("✅ Image loaded successfully")}
+          onError={(e) => {
+            console.error("❌ Image failed to load", e);
+            (e.target as HTMLImageElement).style.border = '3px solid red';
+          }}
+        />
+      ) : (
+        <div className="text-red-600 text-sm">⚠️ No preview available</div>
+      )}
     </div>
   );
 };
@@ -90,7 +131,11 @@ export default function Home() {
   const [editableDisplayName, setEditableDisplayName] = useState('');
   const [classroomId, setClassroomId] = useState<number | null>(null);
 
-    const createClassroom = async () => {
+  const createClassroom = async () => {
+
+    console.log("Supabase client test:", supabase);
+    console.log("Supabase URL test:", (supabase as any).rest?.url);
+    console.log("🧪 Supabase URL check:", (supabase as any).rest?.url);
     setIsTeacher(true);
     const newClassCode = Math.random().toString(36).substring(2, 8).toUpperCase();
   
@@ -99,7 +144,9 @@ export default function Home() {
     const { data, error } = await supabase
       .from('classrooms')
       .insert([{ class_code: newClassCode, teacher_id: 'teacher_placeholder' }])
-      .select('*');
+      .select()
+
+    console.log("Supabase response:", { data, error });
   
     if (error) {
       console.error('Error creating classroom:', error.message);
@@ -276,22 +323,22 @@ bg-[size:20px_20px]">
               <Card
                 key={student.id}
                 className="relative cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => setSelectedStudent(student.id)}
+                onClick={() => setSelectedStudent(student.student_id)}
               >
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    removeStudent(student.id);
+                    removeStudent(student.student_id);
                   }}
                   className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
                 >
                   X
                 </button>
                 <CardContent className="p-4">
-                  <DrawingPreview
-                    studentId={student.id}
-                    classCode={classCode}
-                  />
+                <DrawingPreview
+                studentId={student.student_id}
+                classCode={classCode}
+                />
                   <p className="mt-2 text-center text-sm text-black">{student.displayName}</p>
                 </CardContent>
               </Card>
@@ -303,8 +350,8 @@ bg-[size:20px_20px]">
   }
 
   return (
-    <div className="p-8 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
-bg-[size:20px_20px]">
+    <div className="p-8 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] bg-[size:20px_20px]">
+      <div></div>
       <Card className="mb-6">
         <CardContent className="p-6">
           <h2 className="text-2xl font-bold text-gray-700">Room Code: {classCode}</h2>
