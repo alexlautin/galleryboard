@@ -1,4 +1,4 @@
-/** @type {import('next').NextConfig} */
+/**** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
@@ -10,8 +10,6 @@ const nextConfig = {
     });
     return config;
   },
-};
-module.exports = {
   async headers() {
     return [
       {
@@ -26,4 +24,5 @@ module.exports = {
     ];
   },
 };
-module.exports = nextConfig; 
+
+module.exports = nextConfig;
