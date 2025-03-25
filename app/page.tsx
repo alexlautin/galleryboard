@@ -227,6 +227,21 @@ export default function Home() {
           setStudents(prevStudents => [...prevStudents, payload.new as Student]);
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'classroom_students',
+          filter: `classroom_id=eq.${classroomId}`
+        },
+        (payload) => {
+          console.log('Realtime DELETE payload:', payload);
+          const deletedStudentId = payload.old.student_id;
+          setStudents(prevStudents =>
+            prevStudents.filter(s => s.student_id !== deletedStudentId)
+          );        }
+      )
       .subscribe();
   
     return () => {
@@ -235,7 +250,7 @@ export default function Home() {
   }, [classroomId]);
 
   const removeStudent = async (id: string) => {
-    setStudents((prevStudents) => prevStudents.filter((student) => student.id !== id));
+    setStudents((prevStudents) => prevStudents.filter((student) => student.student_id !== id));
     const { error } = await supabase
       .from('classroom_students')
       .delete()
@@ -321,7 +336,7 @@ bg-[size:20px_20px]">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {students.map((student) => (
               <Card
-                key={student.id}
+                key={student.student_id}
                 className="relative cursor-pointer hover:shadow-lg transition-shadow"
                 onClick={() => setSelectedStudent(student.student_id)}
               >
