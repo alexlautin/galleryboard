@@ -8,6 +8,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { generateTwoWordName } from '@/lib/name-generator';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const Turnstile = dynamic(() =>
+  import('next-turnstile').then(mod => mod.Turnstile), { ssr: false }
+);
 
 type Student = {
   student_id: string;
@@ -130,6 +135,7 @@ export default function Home() {
   const [displayName, setDisplayName] = useState('');
   const [editableDisplayName, setEditableDisplayName] = useState('');
   const [classroomId, setClassroomId] = useState<number | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const createClassroom = async () => {
 
@@ -167,6 +173,10 @@ export default function Home() {
 
   const joinClassroom = async () => {
     if (!inputCode) return;
+    if (!turnstileToken) {
+      setError("Please complete the Turnstile challenge.");
+      return;
+    }
 
     // Generate a unique student ID
     const newStudentId = Math.random().toString(36).substring(2, 10);
@@ -276,10 +286,19 @@ bg-[size:20px_20px]">
                 placeholder="Enter room code"
                 className="text-center"
               />
+              <Turnstile
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                onSuccess={(token) => {
+                  console.log("✅ Turnstile token received:", token);
+                  setTurnstileToken(token);
+                }}
+                className="mb-2"
+              />
               <Button
                 onClick={joinClassroom}
                 size="lg"
                 className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                disabled={!turnstileToken}
               >
                 Join Room
               </Button>
