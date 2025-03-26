@@ -9,10 +9,13 @@ import { generateTwoWordName } from '@/lib/name-generator';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import React from "react";
 
 const Turnstile = dynamic(() =>
   import('next-turnstile').then(mod => mod.Turnstile), { ssr: false }
 );
+
+const sanitize = (input: string) => input.replace(/[^a-zA-Z0-9_-]/g, '');
 
 type Student = {
   student_id: string;
@@ -186,15 +189,16 @@ export default function Home() {
     const newStudentId = Math.random().toString(36).substring(2, 10);
 
     // If displayName is empty, generate a random two-word name
-    const nameToUse = displayName || generateTwoWordName();
+    const nameToUse = sanitize(displayName || generateTwoWordName());
 
     console.log('Attempting to join room with:', { inputCode, newStudentId, nameToUse });
 
     // Query the classrooms table to get the numeric id using the room code
+    const sanitizedCode = sanitize(inputCode);
     const { data: classroomData, error: classroomError } = await supabase
       .from('classrooms')
       .select('id')
-      .eq('class_code', inputCode)
+      .eq('class_code', sanitizedCode)
       .single();
 
     if (classroomError) {
@@ -221,7 +225,7 @@ export default function Home() {
     setClassroomId(classroomData.id);
     
     // Use the room code for display
-    setClassCode(inputCode);
+    setClassCode(sanitizedCode);
   };
   
   useEffect(() => {
