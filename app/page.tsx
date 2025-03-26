@@ -288,7 +288,7 @@ bg-[size:20px_20px]">
               />
               <Turnstile
                 siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                onSuccess={(token) => {
+                onVerify={(token) => {
                   console.log("✅ Turnstile token received:", token);
                   setTurnstileToken(token);
                 }}
