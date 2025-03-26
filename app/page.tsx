@@ -328,19 +328,16 @@ bg-[size:20px_20px]">
 
   if (isTeacher) {
     return (
-      <div className="p-8 bg-white">
-{/* //       <div className="p-8 h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)]  */}
-{/* // bg-[size:20px_20px]"> */}
-        <Card className="mb-6">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-bold text-black">Room Code: {classCode}</h2>
-                <p className="text-gray-500">Connected Guests: {students.length}</p>
-              </div>
+      <div className="p-8 h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+bg-[size:20px_20px]">
+        <div className="bg-white rounded-md shadow p-6 mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold text-black">Room Code: {classCode}</h2>
+              <p className="text-gray-500">Connected Guests: {students.length}</p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {selectedStudent ? (
           <div className="fixed inset-0 z-50 flex flex-col bg-white">
