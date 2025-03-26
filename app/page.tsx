@@ -280,7 +280,7 @@ export default function Home() {
       <div className="flex flex-col items-center justify-center p-4 min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
 bg-[size:20px_20px]">
         <Card className="w-full max-w-md border-none">
-          <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto" />
+          <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto object-contain -mb-5" />
           <CardContent className="space-y-4">
             <div className="flex flex-col space-y-2">
               <Input
@@ -290,14 +290,7 @@ bg-[size:20px_20px]">
                 placeholder="Enter room code"
                 className="text-center"
               />
-              <Turnstile
-                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                onVerify={(token) => {
-                  console.log("✅ Turnstile token received:", token);
-                  setTurnstileToken(token);
-                }}
-                className="mb-2"
-              />
+              
               <Button
                 onClick={joinClassroom}
                 size="lg"
@@ -316,6 +309,17 @@ bg-[size:20px_20px]">
             >
               Create Room
             </Button>
+            <div className="w-full flex justify-center">
+              <Turnstile
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                theme="light"
+                onVerify={(token) => {
+                  console.log("✅ Turnstile token received:", token);
+                  setTurnstileToken(token);
+                }}
+                className="self-center max-w-md"
+              />
+            </div>
           </CardContent>
         </Card>
     </div>
