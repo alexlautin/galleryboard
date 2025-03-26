@@ -328,8 +328,9 @@ bg-[size:20px_20px]">
 
   if (isTeacher) {
     return (
-      <div className="p-8 h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
-bg-[size:20px_20px]">
+      <div className="p-8 bg-white">
+{/* //       <div className="p-8 h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)]  */}
+{/* // bg-[size:20px_20px]"> */}
         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
