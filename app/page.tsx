@@ -138,6 +138,10 @@ export default function Home() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const createClassroom = async () => {
+    if (!turnstileToken) {
+      setError("Please complete the Turnstile challenge.");
+      return;
+    }
 
     console.log("Supabase client test:", supabase);
     console.log("Supabase URL test:", (supabase as any).rest?.url);
@@ -308,6 +312,7 @@ bg-[size:20px_20px]">
               variant="outline"
               className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
               size="lg"
+              disabled={!turnstileToken}
             >
               Create Room
             </Button>
