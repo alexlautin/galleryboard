@@ -1,38 +1,70 @@
-# emoryhacks25
+# GalleryBoard
 
-### Inspiration
+GalleryBoard is a collaborative classroom whiteboard platform built with Next.js, Supabase, and shadcn/ui. Teachers can create rooms, students can join with a code, and everyone gets a real-time, private whiteboard. Teachers can view live previews of all student boards.
 
-Inspired by the mini dry-erase whiteboard, our group envisioned a website where individual users can join a room, draw anything on their own private whiteboard, and have the room host see every board updated live, allowing for people to express their own ideas in a collective room setting.
+## Features
+- Create and join classroom rooms with unique codes
+- Real-time whiteboard for each student
+- Live preview of student boards for teachers
+- Anonymous name generation for students
+- Responsive, modern UI with Tailwind CSS and shadcn/ui
+- Cloudflare Turnstile for anti-bot protection
 
-### What it does
+## Getting Started
 
-Gallery Board updates live and in real-time, has auto generated anonymous names, and a clean and minimal UI. The whiteboard has a color-picker, eraser, and clear all feature.
+### Prerequisites
+- Node.js (v18+ recommended)
+- npm, yarn, or pnpm
+- Supabase project (with tables: `classrooms`, `classroom_students`, `drawing_updates`)
 
-### How we built it
+### Installation
 
-We developed Gallery Board using Next.js (frontend and server integration) and socket.io (real-time bidirectional communication).
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/galleryboard.git
+   cd galleryboard
+   ```
 
-### Challenges we ran into
+2. **Install dependencies:**
+   ```bash
+   npm install
+   # or
+   yarn install
+   # or
+   pnpm install
+   ```
 
-Deployment and using online API frameworks for persistent communications.
+3. **Configure environment variables:**
+   - Copy `.env.local.example` to `.env.local` and fill in your Supabase and Turnstile keys.
+   - Required variables:
+     - `NEXT_PUBLIC_SUPABASE_URL`
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+     - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
 
-### Accomplishments that we're proud of
+4. **Run the development server:**
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   # or
+   pnpm dev
+   ```
 
-Creating a working product during the Hackathon.
+5. **Open the app:**
+   Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
-### What we learned
+## Project Structure
+- `app/` - Next.js app directory (pages, layouts, components)
+- `lib/` - Supabase client and helpers
+- `components/` - UI primitives and shared components
+- `public/` - Static assets (favicon, logo, etc.)
 
-Websockets make deployment challenging, but are useful for live updating.
+## Deployment
+Deploy easily on [Vercel](https://vercel.com/) or your preferred platform. See [Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying).
 
-### What's next for Gallery Board
+## License
+MIT
 
-Online deployment as well as UI improvements and export options for each whiteboard.
+---
 
-### Built With
-
-api
-next.js
-react
-shadcn
-socket.io
-tailwind
+Made by Alex Lautin, Andy Blumberg, and Jake Floch
