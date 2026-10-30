@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { generateTwoWordName } from '@/lib/name-generator';
 import * as data from '@/lib/data';
+import { isDemoMode, takeDemoEnter } from '@/lib/demo';
+import { DEMO_ROOM } from '@/lib/demo-data';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import React from "react";
 
@@ -121,9 +124,25 @@ export default function Home() {
   const [editableDisplayName, setEditableDisplayName] = useState('');
   const [classroomId, setClassroomId] = useState<number | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [demo, setDemo] = useState(false);
+
+  // Rooms work in demo mode (sample data, no bot check) or when Supabase is configured
+  const roomsAvailable = demo || data.isBackendConfigured;
+  const canUseRooms = demo || (data.isBackendConfigured && !!turnstileToken);
+
+  useEffect(() => {
+    if (!isDemoMode()) return;
+    setDemo(true);
+    // Coming from /demo: open the sample room as its teacher
+    if (takeDemoEnter()) {
+      setIsTeacher(true);
+      setClassCode(DEMO_ROOM.class_code);
+      setClassroomId(DEMO_ROOM.id);
+    }
+  }, []);
 
   const createClassroom = async () => {
-    if (!turnstileToken) {
+    if (!demo && !turnstileToken) {
       setError("Please complete the Turnstile challenge.");
       return;
     }
@@ -156,7 +175,7 @@ export default function Home() {
 
   const joinClassroom = async () => {
     if (!inputCode) return;
-    if (!turnstileToken) {
+    if (!demo && !turnstileToken) {
       setError("Please complete the Turnstile challenge.");
       return;
     }
@@ -232,20 +251,32 @@ bg-[size:20px_20px]">
         <Card className="w-full max-w-md border-none">
           <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto object-contain -mb-5" />
           <CardContent className="space-y-4">
+            {!roomsAvailable && (
+              <div className="space-y-2 text-center">
+                <Button asChild size="lg" className="w-full bg-blue-500 text-white hover:bg-blue-600">
+                  <Link href="/demo">Try the demo</Link>
+                </Button>
+                <p className="text-sm text-gray-500">
+                  This site has no backend set up, so creating and joining real rooms is turned off.
+                  The demo uses sample data instead.
+                </p>
+              </div>
+            )}
             <div className="flex flex-col space-y-2">
               <Input
                 type="text"
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                placeholder="Enter room code"
+                placeholder={demo ? `Enter room code (sample room: ${DEMO_ROOM.class_code})` : "Enter room code"}
                 className="text-center"
+                disabled={!roomsAvailable}
               />
               
               <Button
                 onClick={joinClassroom}
                 size="lg"
                 className="w-full bg-blue-500 text-white hover:bg-blue-600"
-                disabled={!turnstileToken}
+                disabled={!canUseRooms}
               >
                 Join Room
               </Button>
@@ -255,21 +286,32 @@ bg-[size:20px_20px]">
               variant="outline"
               className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
               size="lg"
-              disabled={!turnstileToken}
+              disabled={!canUseRooms}
             >
               Create Room
             </Button>
-            <div className="w-full flex justify-center">
-              <Turnstile
-                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                theme="light"
-                onVerify={(token) => {
-                  console.log("✅ Turnstile token received:", token);
-                  setTurnstileToken(token);
-                }}
-                className="self-center max-w-md"
-              />
-            </div>
+            {demo ? (
+              <p className="text-center text-sm text-gray-500">
+                The bot check is skipped in the demo. Rooms and students here are simulated.
+              </p>
+            ) : data.isBackendConfigured ? (
+              <>
+                <div className="w-full flex justify-center">
+                  <Turnstile
+                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                    theme="light"
+                    onVerify={(token) => {
+                      console.log("✅ Turnstile token received:", token);
+                      setTurnstileToken(token);
+                    }}
+                    className="self-center max-w-md"
+                  />
+                </div>
+                <Button asChild variant="ghost" size="lg" className="w-full text-blue-600 hover:bg-blue-50">
+                  <Link href="/demo">Try the demo</Link>
+                </Button>
+              </>
+            ) : null}
           </CardContent>
         </Card>
     </div>
@@ -285,12 +327,18 @@ bg-[size:20px_20px]">
             <div>
               <h2 className="text-2xl font-bold text-black">Room Code: {classCode}</h2>
               <p className="text-gray-500">Connected Guests: {students.length}</p>
+              {demo && (
+                <p className="mt-1 text-sm text-amber-700">
+                  Simulated: you are signed in as this sample room&apos;s teacher, and the students and
+                  their drawings are sample data. Nothing is saved.
+                </p>
+              )}
             </div>
           </div>
         </div>
 
         {selectedStudent ? (
-          <div className="fixed inset-0 z-50 flex flex-col bg-white">
+          <div className={`fixed inset-x-0 bottom-0 ${demo ? 'top-8' : 'top-0'} z-50 flex flex-col bg-white`}>
             <div className="flex justify-between items-center p-4 shadow">
               <h2 className="text-2xl font-bold">Viewing {selectedStudent}&apos;s Board</h2>
               <button
@@ -347,6 +395,11 @@ bg-[size:20px_20px]">
         <CardContent className="p-6">
           <h2 className="text-2xl font-bold text-gray-700">Room Code: {classCode}</h2>
           <p className="text-gray-500">Your Name: {displayName}</p>
+          {demo && (
+            <p className="mt-1 text-sm text-amber-700">
+              Saving is simulated: your drawing stays in this browser tab and is gone when you leave.
+            </p>
+          )}
         </CardContent>
       </Card>
       <Card>

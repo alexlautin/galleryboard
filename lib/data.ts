@@ -1,7 +1,11 @@
 'use client';
 
 // Single entry point for every Supabase call (database + realtime) the app makes.
+// In demo mode each call is served by the in-memory store in lib/demo-data.ts instead,
+// and the Supabase client is never created, so no request reaches Supabase.
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabaseClient';
+import { isDemoMode } from '@/lib/demo';
+import * as demo from '@/lib/demo-data';
 
 export const isBackendConfigured: boolean = isSupabaseConfigured;
 
@@ -29,6 +33,7 @@ export type DrawingUpdateRow = {
 // classrooms
 
 export async function createClassroom(classCode: string) {
+  if (isDemoMode()) return demo.createClassroom(classCode);
   const { data, error } = await getSupabase()
     .from('classrooms')
     .insert([{ class_code: classCode, teacher_id: 'teacher_placeholder' }])
@@ -37,6 +42,7 @@ export async function createClassroom(classCode: string) {
 }
 
 export async function findClassroomByCode(classCode: string) {
+  if (isDemoMode()) return demo.findClassroomByCode(classCode);
   const { data, error } = await getSupabase()
     .from('classrooms')
     .select('id')
@@ -48,6 +54,7 @@ export async function findClassroomByCode(classCode: string) {
 // classroom_students
 
 export async function addStudent(classroomId: number, studentId: string, displayName: string) {
+  if (isDemoMode()) return demo.addStudent(classroomId, studentId, displayName);
   const { data, error } = await getSupabase()
     .from('classroom_students')
     .insert([{ classroom_id: classroomId, student_id: studentId, display_name: displayName }])
@@ -56,6 +63,7 @@ export async function addStudent(classroomId: number, studentId: string, display
 }
 
 export async function removeStudent(studentId: string, classroomId: number) {
+  if (isDemoMode()) return demo.removeStudent(studentId, classroomId);
   const { error } = await getSupabase()
     .from('classroom_students')
     .delete()
@@ -71,6 +79,7 @@ export function subscribeToStudents(
     onDelete: (row: Partial<StudentRow>, payload: any) => void;
   }
 ): Unsubscribe {
+  if (isDemoMode()) return demo.subscribeToStudents(classroomId, handlers);
   const channel = getSupabase().channel('student-insert')
     .on(
       'postgres_changes',
@@ -102,6 +111,7 @@ export function subscribeToStudents(
 // drawing_updates
 
 export async function fetchLatestCanvasState(studentId: string, classCode: string) {
+  if (isDemoMode()) return demo.fetchLatestCanvasState(studentId, classCode);
   const { data, error } = await getSupabase()
     .from('drawing_updates')
     .select('canvas_state')
@@ -113,6 +123,7 @@ export async function fetchLatestCanvasState(studentId: string, classCode: strin
 }
 
 export async function fetchLatestDrawingUpdate(classroomId: number, studentId: string) {
+  if (isDemoMode()) return demo.fetchLatestDrawingUpdate(classroomId, studentId);
   const { data, error } = await getSupabase()
     .from('drawing_updates')
     .select('*')
@@ -124,6 +135,7 @@ export async function fetchLatestDrawingUpdate(classroomId: number, studentId: s
 }
 
 export async function insertDrawingUpdate(row: DrawingUpdateRow) {
+  if (isDemoMode()) return demo.insertDrawingUpdate(row);
   const { error } = await getSupabase().from('drawing_updates').insert([row]);
   return { error: error as DataError | null };
 }
@@ -134,6 +146,7 @@ export function subscribeToStudentDrawing(
   classCode: string,
   onInsert: (row: DrawingUpdateRow, payload: any) => void
 ): Unsubscribe {
+  if (isDemoMode()) return demo.subscribeToStudentDrawing(studentId, classCode, onInsert);
   const channel = getSupabase()
     .channel('drawing-preview')
     .on(
@@ -158,6 +171,7 @@ export function subscribeToRoomDrawings(
   room: { classroomId?: number; classCode: string },
   onInsert: (row: DrawingUpdateRow, payload: any) => void
 ): Unsubscribe {
+  if (isDemoMode()) return demo.subscribeToRoomDrawings(room, onInsert);
   const filterField = room.classroomId
     ? `classroom_id=eq.${room.classroomId}`
     : `classroom_code=eq.${room.classCode}`;
