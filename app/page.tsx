@@ -126,9 +126,13 @@ export default function Home() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [demo, setDemo] = useState(false);
 
-  // Rooms work in demo mode (sample data, no bot check) or when Supabase is configured
-  const roomsAvailable = demo || data.isBackendConfigured;
-  const canUseRooms = demo || (data.isBackendConfigured && !!turnstileToken);
+  const [showRoomsOffNotice, setShowRoomsOffNotice] = useState(false);
+
+  // Real rooms need Supabase and can be turned off for a portfolio deployment. When they're
+  // off, Join and Create stay clickable but only explain that and point to the demo.
+  const roomsOff = !demo && !data.roomsEnabled;
+  const canUseRooms = demo || roomsOff || !!turnstileToken;
+  const showRoomsOff = () => setShowRoomsOffNotice(true);
 
   useEffect(() => {
     if (!isDemoMode()) return;
@@ -268,15 +272,19 @@ bg-[size:20px_20px]">
         <Card className="w-full max-w-md border-none">
           <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto object-contain -mb-5" />
           <CardContent className="space-y-4">
-            {!roomsAvailable && (
+            {roomsOff && (
               <div className="space-y-2 text-center">
-                <Button asChild size="lg" className="w-full bg-blue-500 text-white hover:bg-blue-600">
+                <Button asChild size="lg" className="h-14 w-full bg-blue-600 text-lg font-semibold text-white shadow-md hover:bg-blue-700">
                   <Link href="/demo">Try the demo</Link>
                 </Button>
                 <p className="text-sm text-gray-500">
-                  This site has no backend set up, so creating and joining real rooms is turned off.
-                  The demo uses sample data instead.
+                  Opens a sample classroom with live student boards. No sign-up.
                 </p>
+                <div className="flex items-center gap-3 pt-2 text-xs uppercase tracking-wide text-gray-400">
+                  <span className="h-px flex-1 bg-gray-300" />
+                  or
+                  <span className="h-px flex-1 bg-gray-300" />
+                </div>
               </div>
             )}
             <div className="flex flex-col space-y-2">
@@ -286,20 +294,22 @@ bg-[size:20px_20px]">
                 onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                 placeholder={demo ? `Enter room code (sample room: ${DEMO_ROOM.class_code})` : "Enter room code"}
                 className="text-center"
-                disabled={!roomsAvailable}
               />
               
               <Button
-                onClick={joinClassroom}
+                onClick={roomsOff ? showRoomsOff : joinClassroom}
                 size="lg"
-                className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                variant={roomsOff ? "outline" : "default"}
+                className={roomsOff
+                  ? "w-full text-blue-600 border-blue-600 hover:bg-blue-50"
+                  : "w-full bg-blue-500 text-white hover:bg-blue-600"}
                 disabled={!canUseRooms}
               >
                 Join Room
               </Button>
             </div>
             <Button
-              onClick={createClassroom}
+              onClick={roomsOff ? showRoomsOff : createClassroom}
               variant="outline"
               className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
               size="lg"
@@ -307,11 +317,19 @@ bg-[size:20px_20px]">
             >
               Create Room
             </Button>
+            {roomsOff && showRoomsOffNotice && (
+              <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-900">
+                Rooms are turned off for this portfolio version.{' '}
+                <Link href="/demo" className="font-medium underline underline-offset-2">
+                  Try the full app in demo mode.
+                </Link>
+              </p>
+            )}
             {demo ? (
               <p className="text-center text-sm text-gray-500">
                 The bot check is skipped in the demo. Rooms and students here are simulated.
               </p>
-            ) : data.isBackendConfigured ? (
+            ) : !roomsOff ? (
               <>
                 <div className="w-full flex justify-center">
                   <Turnstile
@@ -324,7 +342,7 @@ bg-[size:20px_20px]">
                     className="self-center max-w-md"
                   />
                 </div>
-                <Button asChild variant="ghost" size="lg" className="w-full text-blue-600 hover:bg-blue-50">
+                <Button asChild variant="outline" size="lg" className="w-full text-blue-600 border-blue-200 hover:bg-blue-50">
                   <Link href="/demo">Try the demo</Link>
                 </Button>
               </>
