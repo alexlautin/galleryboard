@@ -302,7 +302,8 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
         onPointerLeave={handlePointerUp}
       />
 
-      {!isTeacher && (
+      {/* Read-only boards (the teacher's full-screen view) get no drawing tools */}
+      {!isTeacher && !readOnly && (
         <div className="absolute bottom-4 left-4 flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 rounded-lg shadow-md border border-input">
           <TooltipProvider>
             <Tooltip>

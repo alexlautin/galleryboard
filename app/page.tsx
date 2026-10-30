@@ -236,6 +236,23 @@ export default function Home() {
     return unsubscribe;
   }, [classroomId]);
 
+  // Demo only: switch from the teacher dashboard to drawing as a student in the same
+  // room, and back. Your board then shows up in the teacher grid like any student's.
+  const drawAsDemoStudent = async () => {
+    if (!studentId) {
+      const newStudentId = Math.random().toString(36).substring(2, 10);
+      const { error } = await data.addStudent(classroomId!, newStudentId, 'You');
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      setStudentId(newStudentId);
+      setDisplayName('You');
+    }
+    setSelectedStudent(null);
+    setIsTeacher(false);
+  };
+
   const removeStudent = async (id: string) => {
     setStudents((prevStudents) => prevStudents.filter((student) => student.student_id !== id));
     const { error } = await data.removeStudent(id, classroomId!);
@@ -334,13 +351,18 @@ bg-[size:20px_20px]">
                 </p>
               )}
             </div>
+            {demo && (
+              <Button onClick={drawAsDemoStudent} className="shrink-0 bg-blue-500 text-white hover:bg-blue-600">
+                Draw as a student
+              </Button>
+            )}
           </div>
         </div>
 
         {selectedStudent ? (
           <div className={`fixed inset-x-0 bottom-0 ${demo ? 'top-8' : 'top-0'} z-50 flex flex-col bg-white`}>
             <div className="flex justify-between items-center p-4 shadow">
-              <h2 className="text-2xl font-bold">Viewing {selectedStudent}&apos;s Board</h2>
+              <h2 className="text-2xl font-bold">Viewing {students.find(s => s.student_id === selectedStudent)?.displayName || selectedStudent}&apos;s Board</h2>
               <button
                 onClick={() => setSelectedStudent(null)}
                 className="border border-gray-400 rounded px-3 py-1"
@@ -393,6 +415,11 @@ bg-[size:20px_20px]">
       <div></div>
       <Card className="mb-6">
         <CardContent className="p-6">
+          {demo && classroomId && (
+            <Button onClick={() => setIsTeacher(true)} variant="outline" className="float-right ml-4">
+              Back to teacher view
+            </Button>
+          )}
           <h2 className="text-2xl font-bold text-gray-700">Room Code: {classCode}</h2>
           <p className="text-gray-500">Your Name: {displayName}</p>
           {demo && (

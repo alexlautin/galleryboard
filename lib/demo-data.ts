@@ -46,11 +46,12 @@ const sun = (): Stroke[] => [
   stroke('#15803d', line(80, 500, 720, 500)),
 ];
 
-const smiley = (): Stroke[] => [
-  stroke('#7c3aed', circle(400, 300, 170)),
-  stroke('#111827', circle(335, 250, 18), 8),
-  stroke('#111827', circle(465, 250, 18), 8),
-  stroke('#db2777', circle(400, 300, 100, Math.PI * 0.15, Math.PI * 0.85), 8),
+const rocket = (): Stroke[] => [
+  stroke('#475569', [{ x: 340, y: 450 }, { x: 340, y: 230 }, { x: 400, y: 110 }, { x: 460, y: 230 }, { x: 460, y: 450 }, { x: 340, y: 450 }]),
+  stroke('#0891b2', circle(400, 260, 30)),
+  stroke('#dc2626', [{ x: 340, y: 370 }, { x: 290, y: 460 }, { x: 340, y: 450 }]),
+  stroke('#dc2626', [{ x: 460, y: 370 }, { x: 510, y: 460 }, { x: 460, y: 450 }]),
+  stroke('#f59e0b', [{ x: 360, y: 450 }, { x: 380, y: 530 }, { x: 400, y: 480 }, { x: 420, y: 530 }, { x: 440, y: 450 }]),
 ];
 
 const star = (): Stroke[] => [
@@ -61,13 +62,12 @@ const star = (): Stroke[] => [
   }))),
 ];
 
-const tree = (): Stroke[] => [
-  stroke('#92400e', closed([{ x: 370, y: 520 }, { x: 370, y: 380 }, { x: 430, y: 380 }, { x: 430, y: 520 }])),
-  stroke('#15803d', circle(400, 280, 110)),
-  stroke('#15803d', circle(320, 330, 70)),
-  stroke('#15803d', circle(480, 330, 70)),
-  stroke('#b91c1c', circle(360, 260, 12), 8),
-  stroke('#b91c1c', circle(440, 300, 12), 8),
+const mountains = (): Stroke[] => [
+  stroke('#475569', [{ x: 80, y: 480 }, { x: 260, y: 220 }, { x: 380, y: 380 }, { x: 500, y: 180 }, { x: 720, y: 480 }]),
+  stroke('#0ea5e9', [{ x: 215, y: 285 }, { x: 260, y: 220 }, { x: 305, y: 285 }]),
+  stroke('#0ea5e9', [{ x: 450, y: 250 }, { x: 500, y: 180 }, { x: 550, y: 250 }]),
+  stroke('#15803d', line(80, 480, 720, 480)),
+  stroke('#94a3b8', [{ x: 120, y: 140 }, { x: 150, y: 115 }, { x: 190, y: 120 }, { x: 215, y: 140 }, { x: 120, y: 140 }]),
 ];
 
 const flower = (): Stroke[] => [
@@ -88,15 +88,14 @@ const boat = (): Stroke[] => [
   stroke('#2563eb', closed([{ x: 390, y: 200 }, { x: 390, y: 380 }, { x: 290, y: 380 }])),
 ];
 
-// Names follow the app's own anonymous name pattern (lib/name-generator.ts)
 const SAMPLE_STUDENTS: { name: string; strokes: () => Stroke[]; live: boolean }[] = [
-  { name: 'Happy Panda', strokes: house, live: false },
-  { name: 'Clever Fox', strokes: flower, live: true },
-  { name: 'Bright Owl', strokes: sun, live: false },
-  { name: 'Calm Dolphin', strokes: smiley, live: false },
-  { name: 'Swift Hawk', strokes: boat, live: true },
-  { name: 'Kind Bear', strokes: star, live: false },
-  { name: 'Gentle Deer', strokes: tree, live: false },
+  { name: 'User 1', strokes: house, live: false },
+  { name: 'User 2', strokes: flower, live: true },
+  { name: 'User 3', strokes: sun, live: false },
+  { name: 'User 4', strokes: rocket, live: false },
+  { name: 'User 5', strokes: boat, live: true },
+  { name: 'User 6', strokes: star, live: false },
+  { name: 'User 7', strokes: mountains, live: false },
 ];
 
 function render(strokes: Stroke[]): string {
@@ -165,13 +164,13 @@ function putDrawing(row: DrawingUpdateRow) {
   });
 }
 
-// Two sample students keep adding strokes so the teacher's live previews visibly update
+// Two sample students add strokes until their drawing is finished, so the
+// teacher's live previews visibly update. Finished drawings stay as they are.
 function tickLiveBoards() {
   for (const board of liveBoards) {
     const stillHere = students.some(s => s.classroom_id === board.classroomId && s.student_id === board.studentId);
-    if (!stillHere) continue;
-    // Pause on the finished drawing for a few ticks, then start over
-    board.shown = board.shown >= board.strokes.length + 3 ? 1 : board.shown + 1;
+    if (!stillHere || board.shown >= board.strokes.length) continue;
+    board.shown += 1;
     putDrawing({
       classroom_id: board.classroomId,
       classroom_code: board.classCode,
