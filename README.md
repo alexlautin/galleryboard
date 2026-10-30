@@ -53,6 +53,11 @@ GalleryBoard is a collaborative classroom whiteboard platform built with Next.js
 5. **Open the app:**
    Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
+## Demo Mode
+Open `/demo` (or click **Try the demo** on the home page) to use the app with in-memory sample data and no backend. It opens a sample room as its teacher, with simulated students whose boards update live. Nothing is saved and no requests go to Supabase or Turnstile. The flag lives in `sessionStorage` for that tab; use **Exit demo** in the banner to leave.
+
+All Supabase access goes through `lib/data.ts`, which hands each call to `lib/demo-data.ts` while demo mode is on. With no Supabase env vars set, the app still builds and the home page points visitors to the demo.
+
 ## Project Structure
 - `app/` - Next.js app directory (pages, layouts, components)
 - `lib/` - Supabase client and helpers

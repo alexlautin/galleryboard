@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { generateTwoWordName } from '@/lib/name-generator';
-import { supabase } from '@/lib/supabaseClient';
+import * as data from '@/lib/data';
+import { isDemoMode, takeDemoEnter } from '@/lib/demo';
+import { DEMO_ROOM } from '@/lib/demo-data';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import React from "react";
 
@@ -32,20 +35,14 @@ const DrawingPreview = ({ studentId, classCode }: DrawingPreviewProps) => {
 
   useEffect(() => {
     const fetchPreview = async () => {
-      const { data, error } = await supabase
-        .from('drawing_updates')
-        .select('canvas_state')
-        .eq('student_id', studentId)
-        .eq('classroom_code', classCode) // filter by room code
-        .order('updated_at', { ascending: false })
-        .limit(1);
+      const { data: rows, error } = await data.fetchLatestCanvasState(studentId, classCode);
 
-      console.log('🎯 Supabase response:', { data, error });
+      console.log('🎯 Supabase response:', { data: rows, error });
 
       if (error) {
         console.error('Error fetching drawing preview for', studentId, error);
       } else {
-        const canvasState: string | null = data?.[0]?.canvas_state ?? null;
+        const canvasState: string | null = rows?.[0]?.canvas_state ?? null;
         console.log("🖼 Raw canvas_state from Supabase:", canvasState);
         if (canvasState && typeof canvasState === 'string') {
           setPreview(canvasState);
@@ -59,27 +56,15 @@ const DrawingPreview = ({ studentId, classCode }: DrawingPreviewProps) => {
     fetchPreview();
     const interval = setInterval(fetchPreview, 5000); // refresh every 5 seconds
 
-    const channel = supabase
-      .channel('drawing-preview')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'drawing_updates',
-          filter: `student_id=eq.${studentId}&classroom_code=eq.${classCode}`,
-        },
-        (payload) => {
-          console.log("Canvas preview image length:", preview?.length);
-          console.log("Canvas preview content:", preview);
-          fetchPreview(); // trigger full refresh
-        }
-      )
-      .subscribe();
+    const unsubscribe = data.subscribeToStudentDrawing(studentId, classCode, () => {
+      console.log("Canvas preview image length:", preview?.length);
+      console.log("Canvas preview content:", preview);
+      fetchPreview(); // trigger full refresh
+    });
 
     return () => {
       clearInterval(interval);
-      channel.unsubscribe();
+      unsubscribe();
     };
   }, [studentId, classCode]);
 
@@ -139,27 +124,37 @@ export default function Home() {
   const [editableDisplayName, setEditableDisplayName] = useState('');
   const [classroomId, setClassroomId] = useState<number | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [demo, setDemo] = useState(false);
+
+  // Rooms work in demo mode (sample data, no bot check) or when Supabase is configured
+  const roomsAvailable = demo || data.isBackendConfigured;
+  const canUseRooms = demo || (data.isBackendConfigured && !!turnstileToken);
+
+  useEffect(() => {
+    if (!isDemoMode()) return;
+    setDemo(true);
+    // Coming from /demo: open the sample room as its teacher
+    if (takeDemoEnter()) {
+      setIsTeacher(true);
+      setClassCode(DEMO_ROOM.class_code);
+      setClassroomId(DEMO_ROOM.id);
+    }
+  }, []);
 
   const createClassroom = async () => {
-    if (!turnstileToken) {
+    if (!demo && !turnstileToken) {
       setError("Please complete the Turnstile challenge.");
       return;
     }
 
-    console.log("Supabase client test:", supabase);
-    console.log("Supabase URL test:", (supabase as any).rest?.url);
-    console.log("🧪 Supabase URL check:", (supabase as any).rest?.url);
     setIsTeacher(true);
     const newClassCode = Math.random().toString(36).substring(2, 8).toUpperCase();
   
     console.log('Creating classroom with code:', newClassCode);
   
-    const { data, error } = await supabase
-      .from('classrooms')
-      .insert([{ class_code: newClassCode, teacher_id: 'teacher_placeholder' }])
-      .select()
+    const { data: rows, error } = await data.createClassroom(newClassCode);
 
-    console.log("Supabase response:", { data, error });
+    console.log("Supabase response:", { data: rows, error });
   
     if (error) {
       console.error('Error creating classroom:', error.message);
@@ -167,20 +162,20 @@ export default function Home() {
       return;
     }
   
-    if (!data || data.length === 0) {
+    if (!rows || rows.length === 0) {
       console.error('No data returned from Supabase');
       setError('Failed to create classroom: No data returned.');
       return;
     }
   
-    console.log('Classroom created successfully:', data);
+    console.log('Classroom created successfully:', rows);
     setClassCode(newClassCode);
-    setClassroomId(data[0].id);
+    setClassroomId(rows[0].id);
   };
 
   const joinClassroom = async () => {
     if (!inputCode) return;
-    if (!turnstileToken) {
+    if (!demo && !turnstileToken) {
       setError("Please complete the Turnstile challenge.");
       return;
     }
@@ -195,24 +190,17 @@ export default function Home() {
 
     // Query the classrooms table to get the numeric id using the room code
     const sanitizedCode = sanitize(inputCode);
-    const { data: classroomData, error: classroomError } = await supabase
-      .from('classrooms')
-      .select('id')
-      .eq('class_code', sanitizedCode)
-      .single();
+    const { data: classroomData, error: classroomError } = await data.findClassroomByCode(sanitizedCode);
 
-    if (classroomError) {
-      setError(classroomError.message);
+    if (classroomError || !classroomData) {
+      setError(classroomError?.message ?? 'Room not found');
       return;
     }
 
     // Insert a new student record into the 'classroom_students' table using the numeric classroom id
-    const { data, error } = await supabase
-      .from('classroom_students')
-      .insert([{ classroom_id: classroomData.id, student_id: newStudentId, display_name: nameToUse }])
-      .single();
+    const { data: joinData, error } = await data.addStudent(classroomData.id, newStudentId, nameToUse);
 
-    console.log('Join response:', { data, error });
+    console.log('Join response:', { data: joinData, error });
 
     if (error) {
       setError(error.message);
@@ -231,49 +219,26 @@ export default function Home() {
   useEffect(() => {
     if (!classroomId) return;
   
-    const channel = supabase.channel('student-insert')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'classroom_students',
-          filter: `classroom_id=eq.${classroomId}`
-        },
-        (payload) => {
-          console.log('Realtime INSERT payload:', payload);
-          setStudents(prevStudents => [...prevStudents, payload.new as Student]);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'classroom_students',
-          filter: `classroom_id=eq.${classroomId}`
-        },
-        (payload) => {
-          console.log('Realtime DELETE payload:', payload);
-          const deletedStudentId = payload.old.student_id;
-          setStudents(prevStudents =>
-            prevStudents.filter(s => s.student_id !== deletedStudentId)
-          );        }
-      )
-      .subscribe();
-  
-    return () => {
-      channel.unsubscribe();
-    };
+    const unsubscribe = data.subscribeToStudents(classroomId, {
+      onInsert: (row, payload) => {
+        console.log('Realtime INSERT payload:', payload);
+        setStudents(prevStudents => [...prevStudents, row as unknown as Student]);
+      },
+      onDelete: (row, payload) => {
+        console.log('Realtime DELETE payload:', payload);
+        const deletedStudentId = row.student_id;
+        setStudents(prevStudents =>
+          prevStudents.filter(s => s.student_id !== deletedStudentId)
+        );
+      },
+    });
+
+    return unsubscribe;
   }, [classroomId]);
 
   const removeStudent = async (id: string) => {
     setStudents((prevStudents) => prevStudents.filter((student) => student.student_id !== id));
-    const { error } = await supabase
-      .from('classroom_students')
-      .delete()
-      .eq('student_id', id)
-      .eq('classroom_id', classroomId!);
+    const { error } = await data.removeStudent(id, classroomId!);
     if (error) {
       setError(error.message);
     }
@@ -286,20 +251,32 @@ bg-[size:20px_20px]">
         <Card className="w-full max-w-md border-none">
           <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto object-contain -mb-5" />
           <CardContent className="space-y-4">
+            {!roomsAvailable && (
+              <div className="space-y-2 text-center">
+                <Button asChild size="lg" className="w-full bg-blue-500 text-white hover:bg-blue-600">
+                  <Link href="/demo">Try the demo</Link>
+                </Button>
+                <p className="text-sm text-gray-500">
+                  This site has no backend set up, so creating and joining real rooms is turned off.
+                  The demo uses sample data instead.
+                </p>
+              </div>
+            )}
             <div className="flex flex-col space-y-2">
               <Input
                 type="text"
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                placeholder="Enter room code"
+                placeholder={demo ? `Enter room code (sample room: ${DEMO_ROOM.class_code})` : "Enter room code"}
                 className="text-center"
+                disabled={!roomsAvailable}
               />
               
               <Button
                 onClick={joinClassroom}
                 size="lg"
                 className="w-full bg-blue-500 text-white hover:bg-blue-600"
-                disabled={!turnstileToken}
+                disabled={!canUseRooms}
               >
                 Join Room
               </Button>
@@ -309,21 +286,32 @@ bg-[size:20px_20px]">
               variant="outline"
               className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
               size="lg"
-              disabled={!turnstileToken}
+              disabled={!canUseRooms}
             >
               Create Room
             </Button>
-            <div className="w-full flex justify-center">
-              <Turnstile
-                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                theme="light"
-                onVerify={(token) => {
-                  console.log("✅ Turnstile token received:", token);
-                  setTurnstileToken(token);
-                }}
-                className="self-center max-w-md"
-              />
-            </div>
+            {demo ? (
+              <p className="text-center text-sm text-gray-500">
+                The bot check is skipped in the demo. Rooms and students here are simulated.
+              </p>
+            ) : data.isBackendConfigured ? (
+              <>
+                <div className="w-full flex justify-center">
+                  <Turnstile
+                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                    theme="light"
+                    onVerify={(token) => {
+                      console.log("✅ Turnstile token received:", token);
+                      setTurnstileToken(token);
+                    }}
+                    className="self-center max-w-md"
+                  />
+                </div>
+                <Button asChild variant="ghost" size="lg" className="w-full text-blue-600 hover:bg-blue-50">
+                  <Link href="/demo">Try the demo</Link>
+                </Button>
+              </>
+            ) : null}
           </CardContent>
         </Card>
     </div>
@@ -339,12 +327,18 @@ bg-[size:20px_20px]">
             <div>
               <h2 className="text-2xl font-bold text-black">Room Code: {classCode}</h2>
               <p className="text-gray-500">Connected Guests: {students.length}</p>
+              {demo && (
+                <p className="mt-1 text-sm text-amber-700">
+                  Simulated: you are signed in as this sample room&apos;s teacher, and the students and
+                  their drawings are sample data. Nothing is saved.
+                </p>
+              )}
             </div>
           </div>
         </div>
 
         {selectedStudent ? (
-          <div className="fixed inset-0 z-50 flex flex-col bg-white">
+          <div className={`fixed inset-x-0 bottom-0 ${demo ? 'top-8' : 'top-0'} z-50 flex flex-col bg-white`}>
             <div className="flex justify-between items-center p-4 shadow">
               <h2 className="text-2xl font-bold">Viewing {selectedStudent}&apos;s Board</h2>
               <button
@@ -401,6 +395,11 @@ bg-[size:20px_20px]">
         <CardContent className="p-6">
           <h2 className="text-2xl font-bold text-gray-700">Room Code: {classCode}</h2>
           <p className="text-gray-500">Your Name: {displayName}</p>
+          {demo && (
+            <p className="mt-1 text-sm text-amber-700">
+              Saving is simulated: your drawing stays in this browser tab and is gone when you leave.
+            </p>
+          )}
         </CardContent>
       </Card>
       <Card>
