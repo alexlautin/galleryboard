@@ -9,6 +9,11 @@ import * as demo from '@/lib/demo-data';
 
 export const isBackendConfigured: boolean = isSupabaseConfigured;
 
+// Portfolio deployments set NEXT_PUBLIC_PORTFOLIO_MODE=true to turn real rooms off
+// even when the Supabase keys are present, so visitors only use the demo
+export const roomsEnabled: boolean =
+  isBackendConfigured && process.env.NEXT_PUBLIC_PORTFOLIO_MODE !== 'true';
+
 export type DataError = { message: string };
 export type Unsubscribe = () => void;
 
