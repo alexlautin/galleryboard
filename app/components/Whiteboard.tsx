@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { useRouter } from 'next/navigation'; // Import useRouter for navigation
-import { supabase } from '@/lib/supabaseClient';
+import * as data from '@/lib/data';
 
 type DrawData = {
   points: { x: number; y: number }[];
@@ -70,16 +70,10 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
 
     // Request initial canvas state if we're a teacher viewing a student's board
     if (isTeacher && selectedStudentId && classroomId) {
-      supabase
-        .from('drawing_updates')
-        .select('*')
-        .eq('classroom_id', classroomId)
-        .eq('student_id', selectedStudentId)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .then(({ data }) => {
-          if (data && data.length > 0) {
-            const update = data[0];
+      data.fetchLatestDrawingUpdate(classroomId, selectedStudentId)
+        .then(({ data: rows }) => {
+          if (rows && rows.length > 0) {
+            const update = rows[0];
             if (update.canvas_state) {
               loadCanvasState(update.canvas_state);
             } else if (update.draw_data) {
@@ -91,19 +85,11 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
   }, [classCode, isTeacher, selectedStudentId, classroomId]);
 
   useEffect(() => {
-    const filterField = classroomId ? `classroom_id=eq.${classroomId}` : `classroom_code=eq.${classCode}`;
-    const channel = supabase.channel('drawing-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'drawing_updates',
-          filter: filterField
-        },
-        (payload) => {
+    const unsubscribe = data.subscribeToRoomDrawings(
+        { classroomId, classCode },
+        (row, payload) => {
             console.log('Drawing update payload:', payload);
-            const { student_id, draw_data, canvas_state } = payload.new;
+            const { student_id, draw_data, canvas_state } = row;
             console.log("Filter check:", { isTeacher, selectedStudentId, student_id, studentId });
           if (isTeacher) {
             if (!selectedStudentId || selectedStudentId === student_id) {
@@ -123,12 +109,9 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
             }
           }
         }
-      )
-      .subscribe();
-    
-    return () => {
-      channel.unsubscribe();
-    };
+      );
+
+    return unsubscribe;
   }, [classroomId, classCode, studentId, isTeacher, selectedStudentId]);
 
   const loadCanvasState = (canvasState: string) => {
@@ -240,9 +223,9 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
         ...(classroomId ? { classroom_id: classroomId } : {}),
         classroom_code: classCode
       };
-      supabase.from('drawing_updates').insert([
+      data.insertDrawingUpdate(
         { ...updateObj, student_id: studentId, draw_data: [], canvas_state: canvasState }
-      ]).then(({ error }) => {
+      ).then(({ error }) => {
         if (error) {
           console.error('Error in handlePointerUp insert:', error);
         }
@@ -263,9 +246,9 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
       ...(classroomId ? { classroom_id: classroomId } : {}),
       classroom_code: classCode
     };
-    supabase.from('drawing_updates').insert([
+    data.insertDrawingUpdate(
       { ...updateObj, student_id: studentId, draw_data: [], canvas_state: canvasState }
-    ]).then(({ error }) => {
+    ).then(({ error }) => {
       if (error) {
         console.error('Error in clearCanvas insert:', error);
       }
@@ -287,14 +270,12 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
       const combinedDrawData = drawBufferRef.current;
       drawBufferRef.current = [];
 
-      supabase.from('drawing_updates').insert([
-        {
-          ...updateObj,
-          student_id: studentId,
-          draw_data: combinedDrawData,
-          canvas_state: canvasState
-        }
-      ]).then(({ error }) => {
+      data.insertDrawingUpdate({
+        ...updateObj,
+        student_id: studentId,
+        draw_data: combinedDrawData,
+        canvas_state: canvasState
+      }).then(({ error }) => {
         if (error) {
           console.error('Error flushing draw buffer:', error);
         }
@@ -454,5 +435,7 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     </div>
   );
 });
+
+Whiteboard.displayName = 'Whiteboard';
 
 export default Whiteboard;
