@@ -120,7 +120,7 @@ export function Landing({ demo, rooms }: { demo: boolean; rooms: React.ReactNode
       <footer className="border-t">
         <div className="container flex flex-col gap-3 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>
-            GalleryBoard, by Alex Lautin, Andy Blumberg and Jake Floch. Built at Emory Hacks, Fall 2025.
+            GalleryBoard, by Alex Lautin, Andy Blumberg and Jake Floch. Built at Emory Hacks, Fall 2025. Redesigned for this demo later.
           </p>
           <a
             href="https://github.com/alexlautin/galleryboard"
