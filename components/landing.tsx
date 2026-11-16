@@ -75,7 +75,7 @@ export function Landing({ demo, rooms }: { demo: boolean; rooms: React.ReactNode
               </p>
             </div>
 
-            <figure className="lg:-mr-6">
+            <figure>
               <ClassroomPreview />
               <figcaption className="mt-3 px-1 text-xs leading-relaxed text-muted-foreground">
                 An animated sketch of the teacher view, made from the demo&apos;s sample drawings. In the app a

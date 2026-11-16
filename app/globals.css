@@ -38,6 +38,11 @@
   * {
     @apply border-border;
   }
+  /* Nothing should ever make the page scroll sideways */
+  html,
+  body {
+    overflow-x: clip;
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: 'cv11', 'ss01';
