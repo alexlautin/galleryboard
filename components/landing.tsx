@@ -47,12 +47,14 @@ export function Landing({ demo, rooms }: { demo: boolean; rooms: React.ReactNode
           <div className="container grid items-center gap-12 pb-16 pt-10 sm:pt-16 lg:grid-cols-[1fr_1.1fr] lg:gap-14 lg:pb-24 lg:pt-20">
             <div className="max-w-xl">
               <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl xl:text-[3.4rem]">
-                Every student gets a whiteboard.{' '}
-                <span className="relative whitespace-nowrap">
-                  <span className="relative z-10">You see</span>
-                  <span className="absolute inset-x-[-0.12em] bottom-[0.1em] -z-0 h-[0.32em] -rotate-1 rounded-sm bg-brand" aria-hidden="true" />
-                </span>{' '}
-                all of them.
+                <span className="block">Every student has a whiteboard.</span>
+                <span className="block">
+                  You see{' '}
+                  <span className="relative whitespace-nowrap">
+                    <span className="relative z-10">their work.</span>
+                    <span className="absolute inset-x-[-0.12em] bottom-[0.1em] -z-0 h-[0.32em] -rotate-1 rounded-sm bg-brand" aria-hidden="true" />
+                  </span>
+                </span>
               </h1>
               <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
                 Students join with a room code and draw on their own board. Your screen shows every board in one
