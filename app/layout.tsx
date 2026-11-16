@@ -1,14 +1,21 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Inter, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DemoBanner } from "@/components/demo-banner";
 
-const inter = Inter({ subsets: ["latin"] });
+const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display" });
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", weight: ["500", "600"] });
 
 export const metadata: Metadata = {
-  title: "GalleryBoard",
-  description: "Interactive whiteboard for classrooms",
+  title: "GalleryBoard: a live whiteboard for every student",
+  description:
+    "Students join with a code and draw on their own private board. The teacher sees every board update live, side by side.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f9f9f7",
 };
 
 export default function RootLayout({
@@ -17,11 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="icon" href="/favicon.ico" />
-      </head>
-      <body className={`${inter.className} min-h-screen bg-background text-foreground antialiased`}>
+    <html lang="en" suppressHydrationWarning className={`${sans.variable} ${display.variable} ${mono.variable}`}>
+      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
@@ -35,4 +39,4 @@ export default function RootLayout({
       </body>
     </html>
   );
-} 
+}

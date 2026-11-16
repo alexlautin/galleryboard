@@ -1,50 +1,95 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
+/* Colour tokens are HSL triplets so Tailwind opacity modifiers work (bg-primary/90). */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 60 14% 98%;
+    --foreground: 160 10% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 160 10% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 160 10% 9%;
+    --primary: 160 12% 11%;
+    --primary-foreground: 60 14% 98%;
+    --secondary: 150 12% 94%;
+    --secondary-foreground: 160 10% 12%;
+    --muted: 150 10% 94%;
+    --muted-foreground: 160 5% 42%;
+    --accent: 147 31% 92%;
+    --accent-foreground: 152 38% 22%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 9% 88%;
+    --input: 150 9% 84%;
+    --ring: 152 30% 38%;
+    --radius: 0.75rem;
+
+    /* Brand sage #BEDCCB, plus a darker ink of it for text and icons */
+    --brand: 146 31% 80%;
+    --brand-ink: 152 38% 27%;
+    --dot: 160 8% 80%;
+    color-scheme: light;
   }
- 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+}
+
+@layer components {
+  /* Whiteboard paper: a soft dot grid */
+  .bg-dots {
+    background-image: radial-gradient(hsl(var(--dot)) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-brand-ink;
+  }
+}
+
+/* Draw-on animation for the landing page's sample boards */
+@keyframes draw-stroke {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.draw-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw-stroke var(--draw-duration, 700ms) ease-out forwards;
+  animation-delay: var(--draw-delay, 0ms);
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.live-dot {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw-stroke {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .live-dot {
+    animation: none;
   }
 }

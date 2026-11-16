@@ -1,12 +1,27 @@
 'use client';
 
 import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Eraser, Pencil, Trash2, Undo2 } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
-import { useRouter } from 'next/navigation'; // Import useRouter for navigation
 import * as data from '@/lib/data';
+import { cn } from '@/lib/utils';
+
+const COLORS = [
+  { name: 'Black', value: '#000000' },
+  { name: 'Red', value: '#dc2626' },
+  { name: 'Orange', value: '#f59e0b' },
+  { name: 'Green', value: '#15803d' },
+  { name: 'Blue', value: '#1d4ed8' },
+  { name: 'Purple', value: '#7c3aed' },
+];
+
+const SIZES = [
+  { name: 'Fine pen', value: 3, dot: 4 },
+  { name: 'Medium pen', value: 6, dot: 7 },
+  { name: 'Thick pen', value: 14, dot: 11 },
+];
+
+const MAX_UNDO = 25;
 
 type DrawData = {
   points: { x: number; y: number }[];
@@ -44,10 +59,12 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
+  const [size, setSize] = useState(SIZES[1].value);
   const [tool, setTool] = useState<'draw' | 'erase'>('draw');
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null);
-  const [canvasState, setCanvasState] = useState<string | null>(null); // Manage canvas state
-  const router = useRouter(); // Hook to handle page navigation
+  // Snapshots of the canvas taken before each stroke or clear, for Undo
+  const undoStackRef = useRef<ImageData[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -88,9 +105,7 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     const unsubscribe = data.subscribeToRoomDrawings(
         { classroomId, classCode },
         (row, payload) => {
-            console.log('Drawing update payload:', payload);
             const { student_id, draw_data, canvas_state } = row;
-            console.log("Filter check:", { isTeacher, selectedStudentId, student_id, studentId });
           if (isTeacher) {
             if (!selectedStudentId || selectedStudentId === student_id) {
               if (canvas_state) {
@@ -135,16 +150,13 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     ctx.beginPath();
     ctx.moveTo(drawData.points[0].x, drawData.points[0].y);
     
-    if (drawData.type === 'erase') {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = drawData.color;
-    }
-    
-    ctx.lineWidth = 2;
+    // The board has a white background, so erasing paints white. That keeps
+    // saved snapshots and the teacher's previews free of transparent holes.
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = drawData.type === 'erase' ? '#ffffff' : drawData.color;
+    ctx.lineWidth = drawData.width || 2;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
     for (let i = 1; i < drawData.points.length; i++) {
       ctx.lineTo(drawData.points[i].x, drawData.points[i].y);
@@ -153,8 +165,41 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     ctx.stroke();
     ctx.closePath();
     
-    // Reset composite operation
-    ctx.globalCompositeOperation = 'source-over';
+  };
+
+  const pushUndo = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    undoStackRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (undoStackRef.current.length > MAX_UNDO) undoStackRef.current.shift();
+    setCanUndo(true);
+  };
+
+  const saveSnapshot = (reason: string) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const updateObj = {
+      ...(classroomId ? { classroom_id: classroomId } : {}),
+      classroom_code: classCode
+    };
+    data.insertDrawingUpdate(
+      { ...updateObj, student_id: studentId, draw_data: [], canvas_state: canvas.toDataURL() }
+    ).then(({ error }) => {
+      if (error) {
+        console.error(`Error in ${reason} insert:`, error);
+      }
+    });
+  };
+
+  const undo = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    const snapshot = undoStackRef.current.pop();
+    setCanUndo(undoStackRef.current.length > 0);
+    if (!canvas || !ctx || !snapshot) return;
+    ctx.putImageData(snapshot, 0, 0);
+    saveSnapshot('undo');
   };
 
   const getCanvasCoordinates = (e: React.PointerEvent) => {
@@ -180,14 +225,23 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     const coords = getCanvasCoordinates(e);
     if (!coords) return;
 
-    setIsDrawing(true);
-    setLastPoint(coords);
-    setCurrentStroke({
+    // Keep getting moves when a finger or pen slides past the edge of the board
+    try {
+      (e.target as Element).setPointerCapture(e.pointerId);
+    } catch {}
+
+    pushUndo();
+    const stroke: DrawData = {
       points: [coords],
       color: tool === 'erase' ? '#ffffff' : color,
-      width: 2,
+      width: tool === 'erase' ? size * 3 : size,
       type: tool
-    });
+    };
+    // A tap leaves a dot
+    drawOnCanvas({ ...stroke, points: [coords, coords] });
+    setIsDrawing(true);
+    setLastPoint(coords);
+    setCurrentStroke(stroke);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -207,7 +261,7 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
   };
 
   const handlePointerUp = () => {
-    if (readOnly) return;
+    if (readOnly || !isDrawing) return;
     setIsDrawing(false);
     setLastPoint(null);
 
@@ -216,21 +270,7 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
       setCurrentStroke(null);
     }
 
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const canvasState = canvas.toDataURL();
-      const updateObj = {
-        ...(classroomId ? { classroom_id: classroomId } : {}),
-        classroom_code: classCode
-      };
-      data.insertDrawingUpdate(
-        { ...updateObj, student_id: studentId, draw_data: [], canvas_state: canvasState }
-      ).then(({ error }) => {
-        if (error) {
-          console.error('Error in handlePointerUp insert:', error);
-        }
-      });
-    }
+    saveSnapshot('handlePointerUp');
   };
 
   const clearCanvas = () => {
@@ -238,21 +278,10 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
+    pushUndo();
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const canvasState = canvas.toDataURL();
-    const updateObj = {
-      ...(classroomId ? { classroom_id: classroomId } : {}),
-      classroom_code: classCode
-    };
-    data.insertDrawingUpdate(
-      { ...updateObj, student_id: studentId, draw_data: [], canvas_state: canvasState }
-    ).then(({ error }) => {
-      if (error) {
-        console.error('Error in clearCanvas insert:', error);
-      }
-    });
+    saveSnapshot('clearCanvas');
   };
 
   // Flush buffered strokes to Supabase every 500ms
@@ -280,162 +309,157 @@ const Whiteboard = forwardRef<HTMLCanvasElement, WhiteboardProps>(({
           console.error('Error flushing draw buffer:', error);
         }
       });
-    }, 100); // flush every 500ms
+    }, 100); // flush every 100ms
 
     return () => clearInterval(interval);
   }, [classroomId, classCode, studentId]);
 
-  // Navigate back to the homepage
-  const handleBackClick = () => {
-    router.push('/'); // Or use window.location.href = '/' for regular navigation
+  const pickColor = (c: string) => {
+    setColor(c);
+    setTool('draw');
   };
 
+  if (readOnly || isTeacher) {
+    return (
+      <div className="overflow-hidden rounded-xl border bg-white shadow-board" onClick={onBoardClick}>
+        <canvas
+          ref={canvasRef}
+          className="block h-auto w-full touch-none"
+          style={{ aspectRatio: '4/3' }}
+          onPointerDown={handlePointerDown}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="relative border border-input rounded-lg shadow-md" onClick={onBoardClick}>
+    <div className="overflow-hidden rounded-xl border bg-card shadow-board">
+      <div
+        role="toolbar"
+        aria-label="Drawing tools"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-2.5 py-2 sm:px-3"
+      >
+        <div className="flex items-center gap-1" role="radiogroup" aria-label="Color">
+          {COLORS.map(c => (
+            <button
+              key={c.value}
+              type="button"
+              role="radio"
+              aria-checked={tool === 'draw' && color === c.value}
+              aria-label={c.name}
+              title={c.name}
+              onClick={() => pickColor(c.value)}
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-full transition sm:h-9 sm:w-9',
+                tool === 'draw' && color === c.value ? 'bg-muted ring-2 ring-foreground/80' : 'hover:bg-muted'
+              )}
+            >
+              <span className="h-5 w-5 rounded-full border border-black/10" style={{ backgroundColor: c.value }} />
+            </button>
+          ))}
+          <label
+            title="Custom color"
+            className={cn(
+              'relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition hover:bg-muted sm:h-9 sm:w-9',
+              tool === 'draw' && !COLORS.some(c => c.value === color) && 'bg-muted ring-2 ring-foreground/80'
+            )}
+          >
+            <span
+              className="h-5 w-5 rounded-full border border-black/10"
+              style={{ background: 'conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444)' }}
+            />
+            <span className="sr-only">Custom color</span>
+            <input
+              type="color"
+              value={color}
+              onChange={e => pickColor(e.target.value)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+          </label>
+        </div>
+
+        <Separator orientation="vertical" className="hidden h-6 sm:block" />
+
+        <div className="flex items-center gap-1" role="radiogroup" aria-label="Pen size">
+          {SIZES.map(s => (
+            <button
+              key={s.value}
+              type="button"
+              role="radio"
+              aria-checked={size === s.value}
+              aria-label={s.name}
+              title={s.name}
+              onClick={() => setSize(s.value)}
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-lg transition sm:h-9 sm:w-9',
+                size === s.value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted'
+              )}
+            >
+              <span className="rounded-full bg-current" style={{ width: s.dot, height: s.dot }} />
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto flex items-center gap-1">
+          <ToolButton label="Pen" active={tool === 'draw'} onClick={() => setTool('draw')}>
+            <Pencil className="h-4 w-4" />
+          </ToolButton>
+          <ToolButton label="Eraser" active={tool === 'erase'} onClick={() => setTool('erase')}>
+            <Eraser className="h-4 w-4" />
+          </ToolButton>
+          <ToolButton label="Undo" onClick={undo} disabled={!canUndo}>
+            <Undo2 className="h-4 w-4" />
+          </ToolButton>
+          <ToolButton label="Clear board" onClick={clearCanvas}>
+            <Trash2 className="h-4 w-4" />
+          </ToolButton>
+        </div>
+      </div>
+
       <canvas
         ref={canvasRef}
-        className="touch-none w-full h-full rounded-lg"
+        className={cn('block h-auto w-full touch-none bg-white', tool === 'erase' ? 'cursor-cell' : 'cursor-crosshair')}
         style={{ aspectRatio: '4/3' }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
-
-      {/* Read-only boards (the teacher's full-screen view) get no drawing tools */}
-      {!isTeacher && !readOnly && (
-        <div className="absolute bottom-4 left-4 flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 rounded-lg shadow-md border border-input">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="w-8 h-8 rounded-md"
-                      style={{ backgroundColor: color }}
-                    >
-                      <span className="sr-only">Pick color</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-2">
-                    <input
-                      type="color"
-                      value={color}
-                      onChange={(e) => setColor(e.target.value)}
-                      className="w-32 h-8"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Pick color</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          
-          <Separator orientation="vertical" className="mx-1" />
-          
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={() => setTool('draw')}
-                  variant={tool === 'draw' ? 'default' : 'secondary'}
-                  size="sm"
-                  className="px-3"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-4 h-4"
-                  >
-                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
-                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-                    <path d="M2 2l7.586 7.586" />
-                    <path d="M11 11l-4 4" />
-                  </svg>
-                  <span className="sr-only">Draw</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Draw</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={() => setTool('erase')}
-                  variant={tool === 'erase' ? 'default' : 'secondary'}
-                  size="sm"
-                  className="px-3"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-4 h-4"
-                  >
-                    <path d="M3 20h18" />
-                    <path d="M15 5l5 5" />
-                    <path d="M20 5l-5 5" />
-                  </svg>
-                  <span className="sr-only">Erase</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Erase</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={clearCanvas}
-                  variant="outline"
-                  size="icon"
-                  className="w-8 h-8"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-5 h-5"
-                  >
-                    <path d="M4 12h16" />
-                    <path d="M12 4v16" />
-                  </svg>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Clear canvas</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      )}
     </div>
   );
 });
+
+function ToolButton({
+  label,
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
+      className={cn(
+        'flex h-9 w-9 items-center justify-center rounded-lg transition disabled:pointer-events-none disabled:opacity-35',
+        active ? 'bg-primary text-primary-foreground' : 'text-foreground/80 hover:bg-muted'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 Whiteboard.displayName = 'Whiteboard';
 

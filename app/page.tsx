@@ -1,18 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { ArrowLeft, LogIn, Plus } from 'lucide-react';
 import Whiteboard from './components/Whiteboard';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Landing } from '@/components/landing';
+import { TeacherDashboard, type Student } from '@/components/teacher-dashboard';
+import { LogoMark } from '@/components/logo';
 import { generateTwoWordName } from '@/lib/name-generator';
 import * as data from '@/lib/data';
 import { isDemoMode, takeDemoEnter } from '@/lib/demo';
 import { DEMO_ROOM } from '@/lib/demo-data';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import dynamic from 'next/dynamic';
-import React from "react";
 
 const Turnstile = dynamic(() =>
   import('next-turnstile').then(mod => mod.Turnstile), { ssr: false }
@@ -20,99 +21,7 @@ const Turnstile = dynamic(() =>
 
 const sanitize = (input: string) => input.replace(/[^a-zA-Z0-9_-]/g, '');
 
-type Student = {
-  student_id: string;
-  displayName: string;
-};
-
-interface DrawingPreviewProps {
-  studentId: string;
-  classCode: string;
-}
-
-const DrawingPreview = ({ studentId, classCode }: DrawingPreviewProps) => {
-  const [preview, setPreview] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchPreview = async () => {
-      const { data: rows, error } = await data.fetchLatestCanvasState(studentId, classCode);
-
-      console.log('🎯 Supabase response:', { data: rows, error });
-
-      if (error) {
-        console.error('Error fetching drawing preview for', studentId, error);
-      } else {
-        const canvasState: string | null = rows?.[0]?.canvas_state ?? null;
-        console.log("🖼 Raw canvas_state from Supabase:", canvasState);
-        if (canvasState && typeof canvasState === 'string') {
-          setPreview(canvasState);
-        } else {
-          console.warn("⚠️ canvas_state is not a string or is null:", canvasState);
-          setPreview(null);
-        }
-      }
-    };
-
-    fetchPreview();
-    const interval = setInterval(fetchPreview, 5000); // refresh every 5 seconds
-
-    const unsubscribe = data.subscribeToStudentDrawing(studentId, classCode, () => {
-      console.log("Canvas preview image length:", preview?.length);
-      console.log("Canvas preview content:", preview);
-      fetchPreview(); // trigger full refresh
-    });
-
-    return () => {
-      clearInterval(interval);
-      unsubscribe();
-    };
-  }, [studentId, classCode]);
-
-  console.log("Canvas preview image:", preview);
-  console.log("Preview type:", typeof preview);
-
-  return (
-    <div className="w-full h-72 flex items-center justify-center gap-4 overflow-hidden rounded-lg border-4 border-blue-500 bg-white">
-      {/* Always render known-good base64 image for debugging
-      <img
-        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/P6/BUQAAAABJRU5ErkJggg=="
-        alt="Test Preview"
-        className="w-24 h-24 border border-yellow-500"
-        onLoad={() => console.log("✅ Hardcoded test image loaded")}
-        onError={(e) => console.error("❌ Hardcoded test image failed", e)}
-      /> */}
-
-      {/* {preview && (
-        <img
-          src={preview.startsWith('data:image') ? preview : `data:image/png;base64,${preview}`}
-          alt="Canvas Preview"
-          className="w-50 h-50 border border-green-500"
-          onLoad={() => console.log("✅ Preview image loaded")}
-          onError={(e) => console.error("❌ Preview image failed to load", e)}
-        />
-      )} */}
-
-      {/* Render actual canvas_state preview */}
-      {preview ? (
-        <img
-          src={preview.startsWith('data:image') ? preview : `data:image/png;base64,${preview}`}
-          alt="Drawing Preview"
-          className="max-h-full max-w-full object-contain"
-          onLoad={() => console.log("✅ Image loaded successfully")}
-          onError={(e) => {
-            console.error("❌ Image failed to load", e);
-            (e.target as HTMLImageElement).style.border = '3px solid red';
-          }}
-        />
-      ) : (
-        <div className="text-red-600 text-sm">⚠️ No preview available</div>
-      )}
-    </div>
-  );
-};
-
 export default function Home() {
-  const router = useRouter();
   const [isTeacher, setIsTeacher] = useState(false);
   const [classCode, setClassCode] = useState('');
   const [inputCode, setInputCode] = useState('');
@@ -121,10 +30,10 @@ export default function Home() {
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
-  const [editableDisplayName, setEditableDisplayName] = useState('');
   const [classroomId, setClassroomId] = useState<number | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [demo, setDemo] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const [showRoomsOffNotice, setShowRoomsOffNotice] = useState(false);
 
@@ -145,34 +54,33 @@ export default function Home() {
     }
   }, []);
 
+  // Each view starts at the top
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [classCode, isTeacher]);
+
   const createClassroom = async () => {
     if (!demo && !turnstileToken) {
-      setError("Please complete the Turnstile challenge.");
+      setError("Please complete the bot check first.");
+      return;
+    }
+    setError(null);
+    setBusy(true);
+
+    const newClassCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { data: rows, error } = await data.createClassroom(newClassCode);
+    setBusy(false);
+
+    if (error) {
+      setError(`Couldn't create a room: ${error.message}`);
+      return;
+    }
+    if (!rows || rows.length === 0) {
+      setError("Couldn't create a room: no data came back.");
       return;
     }
 
     setIsTeacher(true);
-    const newClassCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-  
-    console.log('Creating classroom with code:', newClassCode);
-  
-    const { data: rows, error } = await data.createClassroom(newClassCode);
-
-    console.log("Supabase response:", { data: rows, error });
-  
-    if (error) {
-      console.error('Error creating classroom:', error.message);
-      setError(`Failed to create classroom: ${error.message}`);
-      return;
-    }
-  
-    if (!rows || rows.length === 0) {
-      console.error('No data returned from Supabase');
-      setError('Failed to create classroom: No data returned.');
-      return;
-    }
-  
-    console.log('Classroom created successfully:', rows);
     setClassCode(newClassCode);
     setClassroomId(rows[0].id);
   };
@@ -180,56 +88,44 @@ export default function Home() {
   const joinClassroom = async () => {
     if (!inputCode) return;
     if (!demo && !turnstileToken) {
-      setError("Please complete the Turnstile challenge.");
+      setError("Please complete the bot check first.");
       return;
     }
+    setError(null);
+    setBusy(true);
 
-    // Generate a unique student ID
     const newStudentId = Math.random().toString(36).substring(2, 10);
-
-    // If displayName is empty, generate a random two-word name
     const nameToUse = sanitize(displayName || generateTwoWordName());
-
-    console.log('Attempting to join room with:', { inputCode, newStudentId, nameToUse });
-
-    // Query the classrooms table to get the numeric id using the room code
     const sanitizedCode = sanitize(inputCode);
     const { data: classroomData, error: classroomError } = await data.findClassroomByCode(sanitizedCode);
 
     if (classroomError || !classroomData) {
+      setBusy(false);
       setError(classroomError?.message ?? 'Room not found');
       return;
     }
 
-    // Insert a new student record into the 'classroom_students' table using the numeric classroom id
-    const { data: joinData, error } = await data.addStudent(classroomData.id, newStudentId, nameToUse);
-
-    console.log('Join response:', { data: joinData, error });
-
+    const { error } = await data.addStudent(classroomData.id, newStudentId, nameToUse);
+    setBusy(false);
     if (error) {
       setError(error.message);
       return;
     }
 
-    // Set the student ID, display name, and classroomId state
     setStudentId(newStudentId);
     setDisplayName(nameToUse);
     setClassroomId(classroomData.id);
-    
-    // Use the room code for display
     setClassCode(sanitizedCode);
   };
-  
+
   useEffect(() => {
     if (!classroomId) return;
-  
+
     const unsubscribe = data.subscribeToStudents(classroomId, {
-      onInsert: (row, payload) => {
-        console.log('Realtime INSERT payload:', payload);
+      onInsert: (row) => {
         setStudents(prevStudents => [...prevStudents, row as unknown as Student]);
       },
-      onDelete: (row, payload) => {
-        console.log('Realtime DELETE payload:', payload);
+      onDelete: (row) => {
         const deletedStudentId = row.student_id;
         setStudents(prevStudents =>
           prevStudents.filter(s => s.student_id !== deletedStudentId)
@@ -259,199 +155,148 @@ export default function Home() {
 
   const removeStudent = async (id: string) => {
     setStudents((prevStudents) => prevStudents.filter((student) => student.student_id !== id));
+    if (selectedStudent === id) setSelectedStudent(null);
     const { error } = await data.removeStudent(id, classroomId!);
     if (error) {
       setError(error.message);
     }
-  }
+  };
 
   if (!classCode) {
-    return (
-      <div className="flex flex-col items-center justify-center p-4 min-h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
-bg-[size:20px_20px]">
-        <Card className="w-full max-w-md border-none">
-          <img src="/galleryboardlogo.png" alt="Logo" className="h-[225px] w-auto object-contain -mb-5" />
-          <CardContent className="space-y-4">
-            {roomsOff && (
-              <div className="space-y-2 text-center">
-                <Button asChild size="lg" className="h-14 w-full bg-blue-600 text-lg font-semibold text-white shadow-md hover:bg-blue-700">
-                  <Link href="/demo">Try the demo</Link>
-                </Button>
-                <p className="text-sm text-gray-500">
-                  Opens a sample classroom with live student boards. No sign-up.
-                </p>
-                <div className="flex items-center gap-3 pt-2 text-xs uppercase tracking-wide text-gray-400">
-                  <span className="h-px flex-1 bg-gray-300" />
-                  or
-                  <span className="h-px flex-1 bg-gray-300" />
-                </div>
-              </div>
-            )}
-            <div className="flex flex-col space-y-2">
-              <Input
-                type="text"
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                placeholder={demo ? `Enter room code (sample room: ${DEMO_ROOM.class_code})` : "Enter room code"}
-                className="text-center"
-              />
-              
-              <Button
-                onClick={roomsOff ? showRoomsOff : joinClassroom}
-                size="lg"
-                variant={roomsOff ? "outline" : "default"}
-                className={roomsOff
-                  ? "w-full text-blue-600 border-blue-600 hover:bg-blue-50"
-                  : "w-full bg-blue-500 text-white hover:bg-blue-600"}
-                disabled={!canUseRooms}
-              >
-                Join Room
-              </Button>
-            </div>
-            <Button
-              onClick={roomsOff ? showRoomsOff : createClassroom}
-              variant="outline"
-              className="w-full text-blue-600 border-blue-600 hover:bg-blue-50"
-              size="lg"
-              disabled={!canUseRooms}
-            >
-              Create Room
+    const rooms = (
+      <div className="rounded-2xl border bg-card p-5 shadow-board sm:p-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (roomsOff) showRoomsOff();
+            else joinClassroom();
+          }}
+          className="space-y-3"
+        >
+          <label htmlFor="room-code" className="text-sm font-medium">
+            Join with a room code
+          </label>
+          <div className="flex gap-2">
+            <Input
+              id="room-code"
+              type="text"
+              value={inputCode}
+              onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+              placeholder={demo ? DEMO_ROOM.class_code : 'ABC123'}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={12}
+              className="h-11 flex-1 font-mono text-base uppercase tracking-[0.2em] placeholder:tracking-[0.2em]"
+            />
+            <Button type="submit" className="h-11 px-5" disabled={!canUseRooms || busy}>
+              <LogIn className="mr-2 h-4 w-4" aria-hidden="true" />
+              Join
             </Button>
-            {roomsOff && showRoomsOffNotice && (
-              <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-900">
-                Rooms are turned off for this portfolio version.{' '}
-                <Link href="/demo" className="font-medium underline underline-offset-2">
-                  Try the full app in demo mode.
-                </Link>
-              </p>
-            )}
-            {demo ? (
-              <p className="text-center text-sm text-gray-500">
-                The bot check is skipped in the demo. Rooms and students here are simulated.
-              </p>
-            ) : !roomsOff ? (
-              <>
-                <div className="w-full flex justify-center">
-                  <Turnstile
-                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                    theme="light"
-                    onVerify={(token) => {
-                      console.log("✅ Turnstile token received:", token);
-                      setTurnstileToken(token);
-                    }}
-                    className="self-center max-w-md"
-                  />
-                </div>
-                <Button asChild variant="outline" size="lg" className="w-full text-blue-600 border-blue-200 hover:bg-blue-50">
-                  <Link href="/demo">Try the demo</Link>
-                </Button>
-              </>
-            ) : null}
-          </CardContent>
-        </Card>
-    </div>
+          </div>
+          {demo && (
+            <p className="text-xs text-muted-foreground">
+              The sample room is <span className="font-mono font-semibold text-foreground">{DEMO_ROOM.class_code}</span>.
+            </p>
+          )}
+        </form>
+
+        <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          or
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <Button
+          onClick={roomsOff ? showRoomsOff : createClassroom}
+          variant="outline"
+          className="h-11 w-full"
+          disabled={!canUseRooms || busy}
+        >
+          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+          Create a room as a teacher
+        </Button>
+
+        {roomsOff && showRoomsOffNotice && (
+          <p role="status" className="mt-4 rounded-lg bg-accent px-3 py-2.5 text-sm text-accent-foreground">
+            Rooms are turned off in this portfolio version.{' '}
+            <Link href="/demo" className="font-semibold underline underline-offset-2">
+              Try the full app in demo mode.
+            </Link>
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        {demo ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            The bot check is skipped in the demo. Rooms and students here are simulated.
+          </p>
+        ) : !roomsOff ? (
+          <div className="mt-4 flex justify-center">
+            <Turnstile
+              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+              theme="light"
+              onVerify={(token) => setTurnstileToken(token)}
+              className="max-w-full"
+            />
+          </div>
+        ) : null}
+      </div>
     );
+
+    return <Landing demo={demo} rooms={rooms} />;
   }
 
   if (isTeacher) {
     return (
-      <div className="p-8 h-screen bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
-bg-[size:20px_20px]">
-        <div className="bg-white rounded-md shadow p-6 mb-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-2xl font-bold text-black">Room Code: {classCode}</h2>
-              <p className="text-gray-500">Connected Guests: {students.length}</p>
-              {demo && (
-                <p className="mt-1 text-sm text-amber-700">
-                  Simulated: you are signed in as this sample room&apos;s teacher, and the students and
-                  their drawings are sample data. Nothing is saved.
-                </p>
-              )}
-            </div>
-            {demo && (
-              <Button onClick={drawAsDemoStudent} className="shrink-0 bg-blue-500 text-white hover:bg-blue-600">
-                Draw as a student
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {selectedStudent ? (
-          <div className={`fixed inset-x-0 bottom-0 ${demo ? 'top-8' : 'top-0'} z-50 flex flex-col bg-white`}>
-            <div className="flex justify-between items-center p-4 shadow">
-              <h2 className="text-2xl font-bold">Viewing {students.find(s => s.student_id === selectedStudent)?.displayName || selectedStudent}&apos;s Board</h2>
-              <button
-                onClick={() => setSelectedStudent(null)}
-                className="border border-gray-400 rounded px-3 py-1"
-              >
-                Close Full Screen
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4">
-              <Whiteboard
-                studentId={selectedStudent}
-                classCode={classCode}
-                readOnly
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {students.map((student) => (
-              <Card
-                key={student.student_id}
-                className="relative cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => setSelectedStudent(student.student_id)}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeStudent(student.student_id);
-                  }}
-                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
-                >
-                  X
-                </button>
-                <CardContent className="p-4">
-                <DrawingPreview
-                studentId={student.student_id}
-                classCode={classCode}
-                />
-                  <p className="mt-2 text-center text-sm text-black">{student.displayName}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+      <TeacherDashboard
+        classCode={classCode}
+        students={students}
+        demo={demo}
+        error={error}
+        selectedStudent={selectedStudent}
+        onSelect={setSelectedStudent}
+        onRemove={removeStudent}
+        onDrawAsStudent={drawAsDemoStudent}
+      />
     );
   }
 
   return (
-    <div className="p-8 bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] bg-[size:20px_20px]">
-      <div></div>
-      <Card className="mb-6">
-        <CardContent className="p-6">
+    <div className="bg-dots min-h-screen">
+      <header className="border-b bg-background/90 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <LogoMark className="h-8 w-8 shrink-0" />
+            <div className="min-w-0 leading-tight">
+              <p className="truncate font-semibold">{displayName}</p>
+              <p className="text-xs text-muted-foreground">
+                Room <span className="font-mono font-semibold tracking-wider text-foreground">{classCode}</span>
+                {' · '}only your teacher sees this board
+              </p>
+            </div>
+          </div>
           {demo && classroomId && (
-            <Button onClick={() => setIsTeacher(true)} variant="outline" className="float-right ml-4">
-              Back to teacher view
+            <Button onClick={() => setIsTeacher(true)} variant="outline" size="sm">
+              <ArrowLeft className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              Teacher view
             </Button>
           )}
-          <h2 className="text-2xl font-bold text-gray-700">Room Code: {classCode}</h2>
-          <p className="text-gray-500">Your Name: {displayName}</p>
+        </div>
+      </header>
+      <main className="px-3 py-3 sm:px-6 sm:py-6">
+        <div className="mx-auto w-full max-w-[min(100%,calc((100dvh-14rem)*4/3))]">
+          <Whiteboard studentId={studentId} classCode={classCode} />
           {demo && (
-            <p className="mt-1 text-sm text-amber-700">
-              Saving is simulated: your drawing stays in this browser tab and is gone when you leave.
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Saving is simulated: your drawing stays in this tab, shows up in the teacher view, and is gone when you leave.
             </p>
           )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="p-6">
-          <Whiteboard studentId={studentId} classCode={classCode} />
-        </CardContent>
-      </Card>
+        </div>
+      </main>
     </div>
   );
 }
