@@ -3,3 +3,5 @@ next
 .next
 .next
 .next
+*.tsbuildinfo
+.claude/
