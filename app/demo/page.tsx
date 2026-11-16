@@ -13,5 +13,12 @@ export default function DemoPage() {
     router.replace('/');
   }, [router]);
 
-  return <p className="p-8 text-center text-sm text-gray-500">Opening the demo…</p>;
+  return (
+    <div className="bg-dots flex min-h-[60vh] items-center justify-center p-8">
+      <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand border-t-brand-ink" aria-hidden="true" />
+        Opening the sample classroom…
+      </p>
+    </div>
+  );
 }

@@ -7,10 +7,10 @@ import type { ClassroomRow, DataError, DrawingUpdateRow, StudentRow, Unsubscribe
 export const DEMO_ROOM: ClassroomRow = { id: 1, class_code: 'DEMO42', teacher_id: 'teacher_placeholder' };
 
 type Point = { x: number; y: number };
-type Stroke = { color: string; width: number; points: Point[] };
+export type Stroke = { color: string; width: number; points: Point[] };
 
-const WIDTH = 800;
-const HEIGHT = 600;
+export const WIDTH = 800;
+export const HEIGHT = 600;
 
 // sample drawings
 
@@ -88,14 +88,15 @@ const boat = (): Stroke[] => [
   stroke('#2563eb', closed([{ x: 390, y: 200 }, { x: 390, y: 380 }, { x: 290, y: 380 }])),
 ];
 
-const SAMPLE_STUDENTS: { name: string; strokes: () => Stroke[]; live: boolean }[] = [
-  { name: 'User 1', strokes: house, live: false },
-  { name: 'User 2', strokes: flower, live: true },
-  { name: 'User 3', strokes: sun, live: false },
-  { name: 'User 4', strokes: rocket, live: false },
-  { name: 'User 5', strokes: boat, live: true },
-  { name: 'User 6', strokes: star, live: false },
-  { name: 'User 7', strokes: mountains, live: false },
+// Also drawn (as SVG) by the landing page's animated classroom preview
+export const SAMPLE_STUDENTS: { name: string; strokes: () => Stroke[]; live: boolean }[] = [
+  { name: 'Brave Otter', strokes: house, live: false },
+  { name: 'Calm Fox', strokes: flower, live: true },
+  { name: 'Happy Panda', strokes: sun, live: false },
+  { name: 'Swift Hawk', strokes: rocket, live: false },
+  { name: 'Clever Owl', strokes: boat, live: true },
+  { name: 'Kind Deer', strokes: star, live: false },
+  { name: 'Bright Wolf', strokes: mountains, live: false },
 ];
 
 function render(strokes: Stroke[]): string {
